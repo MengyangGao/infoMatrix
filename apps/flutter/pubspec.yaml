@@ -1,0 +1,30 @@
+name: infomatrix_shell
+description: InfoMatrix Flutter shell
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  ffi: ^2.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  msix: ^3.16.13
+
+msix_config:
+  display_name: InfoMatrix
+  publisher_display_name: InfoMatrix
+  identity_name: com.infomatrix.reader.windows
+  msix_version: 0.1.0.0
+  logo_path: ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-1024x1024@1x.png
+  build_windows: false
+  install_certificate: false
+
+flutter:
+  uses-material-design: true

@@ -1,0 +1,417 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apple:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Derive release version
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            echo "INFOMATRIX_VERSION=${GITHUB_REF_NAME#v}" >> "${GITHUB_ENV}"
+          else
+            echo "INFOMATRIX_VERSION=0.1.0" >> "${GITHUB_ENV}"
+          fi
+
+      - name: Import Apple signing assets
+        shell: bash
+        env:
+          APPLE_CERTS_P12_B64: ${{ secrets.INFOMATRIX_APPLE_CERTS_P12_B64 }}
+          APPLE_CERTS_PASSWORD: ${{ secrets.INFOMATRIX_APPLE_CERTS_PASSWORD }}
+          APPLE_KEYCHAIN_PASSWORD: ${{ secrets.INFOMATRIX_APPLE_KEYCHAIN_PASSWORD }}
+          IOS_PROVISIONING_PROFILE_B64: ${{ secrets.INFOMATRIX_IOS_PROVISIONING_PROFILE_B64 }}
+        run: |
+          if [[ -n "${APPLE_CERTS_P12_B64}" && -n "${APPLE_CERTS_PASSWORD}" && -n "${APPLE_KEYCHAIN_PASSWORD}" ]]; then
+            KEYCHAIN_PATH="${RUNNER_TEMP}/infomatrix-signing.keychain-db"
+            CERT_PATH="${RUNNER_TEMP}/infomatrix-signing.p12"
+            printf '%s' "${APPLE_CERTS_P12_B64}" | base64 --decode > "${CERT_PATH}"
+            security create-keychain -p "${APPLE_KEYCHAIN_PASSWORD}" "${KEYCHAIN_PATH}"
+            security set-keychain-settings -lut 21600 "${KEYCHAIN_PATH}"
+            security unlock-keychain -p "${APPLE_KEYCHAIN_PASSWORD}" "${KEYCHAIN_PATH}"
+            security import "${CERT_PATH}" -k "${KEYCHAIN_PATH}" -P "${APPLE_CERTS_PASSWORD}" -T /usr/bin/codesign -T /usr/bin/security -T /usr/bin/xcodebuild
+            security default-keychain -s "${KEYCHAIN_PATH}"
+            security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "${APPLE_KEYCHAIN_PASSWORD}" "${KEYCHAIN_PATH}"
+            echo "INFOMATRIX_APPLE_SIGNING_READY=1" >> "${GITHUB_ENV}"
+            echo "INFOMATRIX_APPLE_KEYCHAIN_PATH=${KEYCHAIN_PATH}" >> "${GITHUB_ENV}"
+          elif [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            echo "Apple signing secrets are missing; continuing with smoke artifacts for macOS/iOS." >&2
+          fi
+
+          if [[ -n "${IOS_PROVISIONING_PROFILE_B64}" ]]; then
+            PROFILE_DIR="${HOME}/Library/MobileDevice/Provisioning Profiles"
+            mkdir -p "${PROFILE_DIR}"
+            PROFILE_PATH="${RUNNER_TEMP}/infomatrix.mobileprovision"
+            printf '%s' "${IOS_PROVISIONING_PROFILE_B64}" | base64 --decode > "${PROFILE_PATH}"
+            PROFILE_UUID="$(
+              security cms -D -i "${PROFILE_PATH}" | /usr/bin/plutil -extract UUID raw -o - -
+            )"
+            if [[ -z "${PROFILE_UUID}" ]]; then
+              echo "Failed to extract provisioning profile UUID." >&2
+              exit 1
+            fi
+            cp "${PROFILE_PATH}" "${PROFILE_DIR}/${PROFILE_UUID}.mobileprovision"
+            echo "INFOMATRIX_IOS_PROVISIONING_READY=1" >> "${GITHUB_ENV}"
+          elif [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            echo "iOS provisioning profile secret is missing; simulator artifacts will be published instead of an IPA." >&2
+          fi
+
+      - name: Configure macOS and iOS release modes
+        shell: bash
+        env:
+          MACOS_SIGNING_IDENTITY: ${{ secrets.INFOMATRIX_MACOS_SIGNING_IDENTITY }}
+          MACOS_NOTARY_PROFILE: ${{ secrets.INFOMATRIX_MACOS_NOTARY_PROFILE }}
+          MACOS_NOTARY_APPLE_ID: ${{ secrets.INFOMATRIX_MACOS_NOTARY_APPLE_ID }}
+          MACOS_NOTARY_APPLE_PASSWORD: ${{ secrets.INFOMATRIX_MACOS_NOTARY_APPLE_PASSWORD }}
+          MACOS_NOTARY_TEAM_ID: ${{ secrets.INFOMATRIX_MACOS_NOTARY_TEAM_ID }}
+          IOS_TEAM_ID: ${{ secrets.INFOMATRIX_IOS_TEAM_ID }}
+          IOS_EXPORT_METHOD: ${{ secrets.INFOMATRIX_IOS_EXPORT_METHOD }}
+          IOS_SIGNING_STYLE: ${{ secrets.INFOMATRIX_IOS_SIGNING_STYLE }}
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" && "${INFOMATRIX_APPLE_SIGNING_READY:-0}" == "1" ]]; then
+            if [[ -z "${MACOS_SIGNING_IDENTITY}" ]]; then
+              echo "Official macOS releases require INFOMATRIX_MACOS_SIGNING_IDENTITY." >&2
+              exit 1
+            fi
+
+            if [[ -z "${MACOS_NOTARY_PROFILE}" && ( -z "${MACOS_NOTARY_APPLE_ID}" || -z "${MACOS_NOTARY_APPLE_PASSWORD}" || -z "${MACOS_NOTARY_TEAM_ID}" ) ]]; then
+              echo "Official macOS releases require notarization credentials." >&2
+              exit 1
+            fi
+
+            if [[ "${INFOMATRIX_IOS_PROVISIONING_READY:-0}" != "1" || -z "${IOS_TEAM_ID}" || -z "${IOS_EXPORT_METHOD}" ]]; then
+              echo "Official iOS releases require a provisioning profile, team ID, and export method." >&2
+              exit 1
+            fi
+
+            echo "INFOMATRIX_REQUIRE_SIGNED_RELEASE=1" >> "${GITHUB_ENV}"
+            echo "INFOMATRIX_REQUIRE_NOTARIZED_RELEASE=1" >> "${GITHUB_ENV}"
+            echo "INFOMATRIX_REQUIRE_DMG_RELEASE=1" >> "${GITHUB_ENV}"
+            echo "INFOMATRIX_REQUIRE_DEVICE_RELEASE=1" >> "${GITHUB_ENV}"
+          elif [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            echo "Apple signing is unavailable; continuing with ad-hoc macOS and simulator-only iOS smoke artifacts." >&2
+          fi
+
+          if [[ "${INFOMATRIX_APPLE_SIGNING_READY:-0}" == "1" && -n "${MACOS_SIGNING_IDENTITY}" ]]; then
+            echo "INFOMATRIX_MACOS_SIGNING_IDENTITY=${MACOS_SIGNING_IDENTITY}" >> "${GITHUB_ENV}"
+          fi
+
+          if [[ "${INFOMATRIX_APPLE_SIGNING_READY:-0}" == "1" && -n "${MACOS_NOTARY_PROFILE}" ]]; then
+            echo "INFOMATRIX_MACOS_NOTARIZE=1" >> "${GITHUB_ENV}"
+            echo "INFOMATRIX_MACOS_NOTARY_PROFILE=${MACOS_NOTARY_PROFILE}" >> "${GITHUB_ENV}"
+          elif [[ "${INFOMATRIX_APPLE_SIGNING_READY:-0}" == "1" && -n "${MACOS_NOTARY_APPLE_ID}" && -n "${MACOS_NOTARY_APPLE_PASSWORD}" && -n "${MACOS_NOTARY_TEAM_ID}" ]]; then
+            echo "INFOMATRIX_MACOS_NOTARIZE=1" >> "${GITHUB_ENV}"
+            echo "INFOMATRIX_MACOS_NOTARY_APPLE_ID=${MACOS_NOTARY_APPLE_ID}" >> "${GITHUB_ENV}"
+            echo "INFOMATRIX_MACOS_NOTARY_APPLE_PASSWORD=${MACOS_NOTARY_APPLE_PASSWORD}" >> "${GITHUB_ENV}"
+            echo "INFOMATRIX_MACOS_NOTARY_TEAM_ID=${MACOS_NOTARY_TEAM_ID}" >> "${GITHUB_ENV}"
+          fi
+
+          if [[ "${INFOMATRIX_APPLE_SIGNING_READY:-0}" == "1" && "${INFOMATRIX_IOS_PROVISIONING_READY:-0}" == "1" && -n "${IOS_TEAM_ID}" && -n "${IOS_EXPORT_METHOD}" ]]; then
+            echo "INFOMATRIX_IOS_DEVICE_RELEASE=1" >> "${GITHUB_ENV}"
+            echo "INFOMATRIX_IOS_TEAM_ID=${IOS_TEAM_ID}" >> "${GITHUB_ENV}"
+            echo "INFOMATRIX_IOS_EXPORT_METHOD=${IOS_EXPORT_METHOD}" >> "${GITHUB_ENV}"
+            if [[ -n "${IOS_SIGNING_STYLE}" ]]; then
+              echo "INFOMATRIX_IOS_SIGNING_STYLE=${IOS_SIGNING_STYLE}" >> "${GITHUB_ENV}"
+            fi
+          elif [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            echo "iOS device release is unavailable; continuing with simulator artifacts only." >&2
+          fi
+
+      - name: Build Apple packages
+        run: |
+          tooling/scripts/package_macos_release.sh
+          tooling/scripts/package_ios_release.sh
+
+      - name: Write Apple checksums
+        shell: bash
+        run: |
+          cd dist/releases
+          shopt -s nullglob
+          for platform in macos ios; do
+            if [[ ! -d "${platform}" ]]; then
+              continue
+            fi
+
+            checksum_file="${platform}/InfoMatrix-${platform}.SHA256SUMS"
+            : > "${checksum_file}"
+            for file in "${platform}"/*; do
+              [[ -f "${file}" ]] || continue
+              [[ "$(basename "${file}")" == "$(basename "${checksum_file}")" ]] && continue
+              hash="$(shasum -a 256 "${file}" | awk '{print $1}')"
+              printf '%s  %s\n' "${hash}" "$(basename "${file}")" >> "${checksum_file}"
+            done
+          done
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-release
+          path: dist/releases/macos/*
+          if-no-files-found: error
+
+      - name: Upload iOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-release
+          path: dist/releases/ios/*
+          if-no-files-found: error
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Derive release version
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            echo "INFOMATRIX_VERSION=${GITHUB_REF_NAME#v}" >> "${GITHUB_ENV}"
+          else
+            echo "INFOMATRIX_VERSION=0.1.0" >> "${GITHUB_ENV}"
+          fi
+
+      - name: Build Windows package
+        shell: bash
+        run: tooling/scripts/package_flutter_windows_release.sh
+
+      - name: Write Windows checksum
+        shell: pwsh
+        run: |
+          $checksumFile = "dist/releases/windows/InfoMatrix-windows-x64.SHA256SUMS"
+          New-Item -ItemType File -Force -Path $checksumFile | Out-Null
+          Get-ChildItem "dist/releases/windows" -File |
+            Where-Object { $_.Name -ne (Split-Path $checksumFile -Leaf) } |
+            ForEach-Object {
+              $hash = (Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLowerInvariant()
+              "$hash  $($_.Name)" | Add-Content -Path $checksumFile
+            }
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-release
+          path: dist/releases/windows/*
+          if-no-files-found: error
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build pkg-config libgtk-3-dev
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Derive release version
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            echo "INFOMATRIX_VERSION=${GITHUB_REF_NAME#v}" >> "${GITHUB_ENV}"
+          else
+            echo "INFOMATRIX_VERSION=0.1.0" >> "${GITHUB_ENV}"
+          fi
+
+      - name: Build Linux package
+        run: tooling/scripts/package_flutter_linux_release.sh
+
+      - name: Write Linux checksum
+        shell: bash
+        run: |
+          checksum_file="dist/releases/linux/InfoMatrix-linux-x64.SHA256SUMS"
+          : > "${checksum_file}"
+          shopt -s nullglob
+          for file in dist/releases/linux/*; do
+            [[ -f "${file}" ]] || continue
+            [[ "$(basename "${file}")" == "$(basename "${checksum_file}")" ]] && continue
+            hash="$(sha256sum "${file}" | awk '{print $1}')"
+            printf '%s  %s\n' "${hash}" "$(basename "${file}")" >> "${checksum_file}"
+          done
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-release
+          path: dist/releases/linux/*
+          if-no-files-found: error
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Android SDK and NDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: tools platform-tools ndk;27.0.12077973
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android,i686-linux-android
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Derive release version
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            echo "INFOMATRIX_VERSION=${GITHUB_REF_NAME#v}" >> "${GITHUB_ENV}"
+          else
+            echo "INFOMATRIX_VERSION=0.1.0" >> "${GITHUB_ENV}"
+          fi
+
+      - name: Configure Android signing
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.INFOMATRIX_ANDROID_KEYSTORE_B64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.INFOMATRIX_ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.INFOMATRIX_ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.INFOMATRIX_ANDROID_KEY_PASSWORD }}
+        run: |
+          ANDROID_DIR="apps/flutter/android"
+          if [[ -n "${ANDROID_KEYSTORE_B64}" && -n "${ANDROID_KEYSTORE_PASSWORD}" && -n "${ANDROID_KEY_ALIAS}" && -n "${ANDROID_KEY_PASSWORD}" ]]; then
+            printf '%s' "${ANDROID_KEYSTORE_B64}" | base64 --decode > "${ANDROID_DIR}/upload-keystore.jks"
+            printf 'storeFile=upload-keystore.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+              "${ANDROID_KEYSTORE_PASSWORD}" "${ANDROID_KEY_ALIAS}" "${ANDROID_KEY_PASSWORD}" > "${ANDROID_DIR}/key.properties"
+            if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+              echo "INFOMATRIX_REQUIRE_SIGNED_RELEASE=1" >> "${GITHUB_ENV}"
+            fi
+          else
+            if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+              echo "Android release keystore is unavailable; continuing with explicit smoke-only signing." >&2
+            fi
+            echo "INFOMATRIX_ANDROID_ALLOW_DEBUG_SIGNING=1" >> "${GITHUB_ENV}"
+          fi
+
+      - name: Build Android package
+        env:
+          INFOMATRIX_ANDROID_FFI_PROFILE: debug
+        run: tooling/scripts/package_flutter_android_release.sh
+
+      - name: Write Android checksum
+        shell: bash
+        run: |
+          checksum_file="dist/releases/android/InfoMatrix-android.SHA256SUMS"
+          : > "${checksum_file}"
+          shopt -s nullglob
+          for file in dist/releases/android/*; do
+            [[ -f "${file}" ]] || continue
+            [[ "$(basename "${file}")" == "$(basename "${checksum_file}")" ]] && continue
+            hash="$(sha256sum "${file}" | awk '{print $1}')"
+            printf '%s  %s\n' "${hash}" "$(basename "${file}")" >> "${checksum_file}"
+          done
+
+      - name: Upload Android artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-release
+          path: dist/releases/android/*
+          if-no-files-found: error
+
+  publish:
+    needs:
+      - apple
+      - android
+      - windows
+      - linux
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-release
+          path: dist/releases/macos
+
+      - name: Download iOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: ios-release
+          path: dist/releases/ios
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-release
+          path: dist/releases/windows
+
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-release
+          path: dist/releases/linux
+
+      - name: Download Android artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: android-release
+          path: dist/releases/android
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/releases/macos/*.dmg
+            dist/releases/macos/*.zip
+            dist/releases/macos/*.SHA256SUMS
+            dist/releases/ios/*.ipa
+            dist/releases/ios/*.zip
+            dist/releases/ios/*.SHA256SUMS
+            dist/releases/windows/*.msix
+            dist/releases/android/*.apk
+            dist/releases/android/*.aab
+            dist/releases/android/*.SHA256SUMS
+            dist/releases/windows/*.zip
+            dist/releases/windows/*.SHA256SUMS
+            dist/releases/linux/*.deb
+            dist/releases/linux/*.SHA256SUMS
+          generate_release_notes: true
+          fail_on_unmatched_files: true

@@ -1,0 +1,32 @@
+# Rust
+target/
+**/target/
+.cargo/
+.cargo-home/
+**/*.rs.bk
+apps/apple/Frameworks/
+
+# Swift/Xcode
+DerivedData/
+.derivedData/
+.build/
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+
+# Flutter/Dart
+.dart_tool/
+.packages
+pubspec.lock
+build/
+dist/
+apps/flutter/android/key.properties
+apps/flutter/android/upload-keystore.jks
+
+# General
+.DS_Store
+.env
+*.log
+reference/
+
+# Local reference repos (do not vendor upstream source)
+reference/netnewswire/

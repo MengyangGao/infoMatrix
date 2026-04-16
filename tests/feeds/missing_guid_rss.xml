@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0">
+  <channel>
+    <title>No GUID Feed</title>
+    <link>https://example.com/</link>
+    <description>Test</description>
+    <item>
+      <title>No GUID Item</title>
+      <link>https://example.com/no-guid</link>
+      <pubDate>Thu, 05 Jan 2023 10:00:00 +0000</pubDate>
+    </item>
+  </channel>
+</rss>

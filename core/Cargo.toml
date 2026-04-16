@@ -1,0 +1,44 @@
+[workspace]
+members = [
+  "crates/discovery",
+  "crates/parser",
+  "crates/models",
+  "crates/storage",
+  "crates/fetcher",
+  "crates/icon",
+  "crates/sync",
+  "crates/notifications",
+  "crates/opml",
+  "crates/search",
+  "crates/app_core",
+  "crates/app_server",
+  "crates/ffi_bridge",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+authors = ["InfoMatrix Contributors"]
+
+[workspace.dependencies]
+anyhow = "1"
+async-trait = "0.1"
+axum = { version = "0.8", features = ["json", "macros"] }
+atom_syndication = "0.12"
+chrono = { version = "0.4", features = ["clock", "serde"] }
+quick-xml = { version = "0.38", features = ["serialize"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "gzip", "brotli", "deflate", "json"] }
+rss = "2"
+rusqlite = { version = "0.37", features = ["bundled", "chrono", "serde_json", "uuid"] }
+scraper = "0.24"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+thiserror = "2"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+url = { version = "2.5", features = ["serde"] }
+uuid = { version = "1", features = ["serde", "v7"] }

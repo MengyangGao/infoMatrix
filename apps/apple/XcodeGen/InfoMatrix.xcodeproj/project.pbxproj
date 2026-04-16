@@ -1,0 +1,847 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		1386D7D8EED89606320E4C0C /* ReaderService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E2035510E827770C55D39E /* ReaderService.swift */; };
+		1C4803D96D9930061E4B0D4E /* ReaderShellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B510BE0036ABB30DDBA9348 /* ReaderShellView.swift */; };
+		2597FBA6573C9C2114E8DAA4 /* InfoMatrixShell.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = AC5EE5B4830F9E5449B93570 /* InfoMatrixShell.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		37B96D9C63782E58BDCBC17C /* iPadApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB1363C7A5260B658C79CBEF /* iPadApp.swift */; };
+		435AF79E69CF66C6231F615C /* MacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00F64D960924A645E1FF233D /* MacApp.swift */; };
+		47410D2A85626BD4E1DAEA78 /* NativeReaderService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F71DE9450536D7C5A0198E86 /* NativeReaderService.swift */; };
+		4765C7DD085022A887167C6C /* InfoMatrixCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4D1DD56DBA5E67A387EE7C8E /* InfoMatrixCore.xcframework */; };
+		5B07608B43AA41F9BC8C6E43 /* iOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F93652CD9A6BD0554D517D0 /* iOSApp.swift */; };
+		5DB783E55FCC1366D27BE873 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF02AD7BC013A916EBDF7A5B /* AppState.swift */; };
+		636B69F470A1FBE7C72DB671 /* InfoMatrixApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94476E434BC313B3149EFC2F /* InfoMatrixApp.swift */; };
+		6481C00F0D7BEF9D724355F0 /* InfoMatrixCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4D1DD56DBA5E67A387EE7C8E /* InfoMatrixCore.xcframework */; };
+		6B466402492C3FD2731FB08C /* AppStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61010C5061315628BF3FA52C /* AppStateTests.swift */; };
+		7433BD66588705A77E458AA9 /* ReaderService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E2035510E827770C55D39E /* ReaderService.swift */; };
+		80319543E0E0F107C534F6FC /* NotificationDeliveryCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31F37F5FC609FBC1C7CCF19F /* NotificationDeliveryCoordinator.swift */; };
+		806A69D57DD521BE81230B10 /* InfoMatrixShell.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AC5EE5B4830F9E5449B93570 /* InfoMatrixShell.framework */; };
+		8350F5A1D0CCCE47B62C2C76 /* NativeReaderService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F71DE9450536D7C5A0198E86 /* NativeReaderService.swift */; };
+		83C81C6AAF53A1C89C5DD1F2 /* ReaderShellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B510BE0036ABB30DDBA9348 /* ReaderShellView.swift */; };
+		87F537454C3DD50F52E78E09 /* ReaderService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E2035510E827770C55D39E /* ReaderService.swift */; };
+		8B6F6822EFBF7473E32BD9EB /* NativeReaderService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F71DE9450536D7C5A0198E86 /* NativeReaderService.swift */; };
+		9332ADBF1DE5DF98FF197564 /* NativeReaderService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F71DE9450536D7C5A0198E86 /* NativeReaderService.swift */; };
+		94EF842D9F837B63F4B6A8C5 /* ReaderService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E2035510E827770C55D39E /* ReaderService.swift */; };
+		9A5F31BA0E649F26DDAC1109 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D8B726220713CAAA2918416 /* Models.swift */; };
+		9CC16FDD6A89BB58DB4449A6 /* ReaderShellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B510BE0036ABB30DDBA9348 /* ReaderShellView.swift */; };
+		BB38519ED74E9C7735834A76 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF02AD7BC013A916EBDF7A5B /* AppState.swift */; };
+		BB61F5CA85A90F9633EA420D /* InfoMatrixApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94476E434BC313B3149EFC2F /* InfoMatrixApp.swift */; };
+		BCA6557651712126920DABFA /* ReaderShellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B510BE0036ABB30DDBA9348 /* ReaderShellView.swift */; };
+		BD5A718556EAA5ADFBFB50DD /* InfoMatrixApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94476E434BC313B3149EFC2F /* InfoMatrixApp.swift */; };
+		C39C223A11DE0888A70BEE5D /* InfoMatrixCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4D1DD56DBA5E67A387EE7C8E /* InfoMatrixCore.xcframework */; };
+		C497371737BCA72742494211 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D8B726220713CAAA2918416 /* Models.swift */; };
+		C73D7BF652A230937E29CA0C /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D8B726220713CAAA2918416 /* Models.swift */; };
+		D22BDD8AD9DAA7035E03F666 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D8B726220713CAAA2918416 /* Models.swift */; };
+		D837963BA5E390EDBC2F8907 /* InfoMatrixCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4D1DD56DBA5E67A387EE7C8E /* InfoMatrixCore.xcframework */; };
+		DCCD6211B9F97F64C0406674 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF02AD7BC013A916EBDF7A5B /* AppState.swift */; };
+		FAE899698AA44E5F677FFFA8 /* InfoMatrixCore.h in Headers */ = {isa = PBXBuildFile; fileRef = 0915017EE615206E08B378A4 /* InfoMatrixCore.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		FC12D8C49863ACED56BFC03B /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF02AD7BC013A916EBDF7A5B /* AppState.swift */; };
+		FC3D567A45A362FB0F8E9454 /* InfoMatrixApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94476E434BC313B3149EFC2F /* InfoMatrixApp.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		90D3FF5ED2300CD1BD2FA093 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 7199B7B6A9EF77023D7BBBA0 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 7FB0985FF97A53B8A636238F;
+			remoteInfo = InfoMatrixShell;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		2C38B1AAE83E87378D226235 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				2597FBA6573C9C2114E8DAA4 /* InfoMatrixShell.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		00F64D960924A645E1FF233D /* MacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacApp.swift; sourceTree = "<group>"; };
+		0915017EE615206E08B378A4 /* InfoMatrixCore.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = InfoMatrixCore.h; sourceTree = "<group>"; };
+		0F93652CD9A6BD0554D517D0 /* iOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSApp.swift; sourceTree = "<group>"; };
+		1032136E76B066EEBEE9E2C3 /* module.modulemap */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.module-map"; path = module.modulemap; sourceTree = "<group>"; };
+		12206CC399ADE389924FADBB /* InfoMatrix-macOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "InfoMatrix-macOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		1D8B726220713CAAA2918416 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		1DE6DBD85A6B1122ED2AA64C /* InfoMatrix-iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "InfoMatrix-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		31F37F5FC609FBC1C7CCF19F /* NotificationDeliveryCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationDeliveryCoordinator.swift; sourceTree = "<group>"; };
+		4B510BE0036ABB30DDBA9348 /* ReaderShellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderShellView.swift; sourceTree = "<group>"; };
+		4D1DD56DBA5E67A387EE7C8E /* InfoMatrixCore.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = InfoMatrixCore.xcframework; path = ../Frameworks/InfoMatrixCore.xcframework; sourceTree = "<group>"; };
+		61010C5061315628BF3FA52C /* AppStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateTests.swift; sourceTree = "<group>"; };
+		94476E434BC313B3149EFC2F /* InfoMatrixApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InfoMatrixApp.swift; sourceTree = "<group>"; };
+		94D61405EAEA8221D035D7FF /* InfoMatrix-iPadOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "InfoMatrix-iPadOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		AC5EE5B4830F9E5449B93570 /* InfoMatrixShell.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = InfoMatrixShell.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		C52A12DB8C519F5D5007E15E /* InfoMatrixShellTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = InfoMatrixShellTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C7E2035510E827770C55D39E /* ReaderService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderService.swift; sourceTree = "<group>"; };
+		CF02AD7BC013A916EBDF7A5B /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
+		DB1363C7A5260B658C79CBEF /* iPadApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iPadApp.swift; sourceTree = "<group>"; };
+		F71DE9450536D7C5A0198E86 /* NativeReaderService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeReaderService.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		25EFC6CBED5542652289A0A7 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				806A69D57DD521BE81230B10 /* InfoMatrixShell.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		663B8FD1E7E3C07065D8EEF1 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D837963BA5E390EDBC2F8907 /* InfoMatrixCore.xcframework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7A082A122B5057D7306E2233 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4765C7DD085022A887167C6C /* InfoMatrixCore.xcframework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		80CD685181AA0482E69D29B8 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C39C223A11DE0888A70BEE5D /* InfoMatrixCore.xcframework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C0563708449F588A300AEAE6 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6481C00F0D7BEF9D724355F0 /* InfoMatrixCore.xcframework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		01C457E71BD177A4E286F8D3 /* XcodeApp */ = {
+			isa = PBXGroup;
+			children = (
+				DB1363C7A5260B658C79CBEF /* iPadApp.swift */,
+			);
+			name = XcodeApp;
+			path = ../iPadOS/XcodeApp;
+			sourceTree = "<group>";
+		};
+		088C4C3306D97A835A388129 /* InfoMatrixShellTests */ = {
+			isa = PBXGroup;
+			children = (
+				61010C5061315628BF3FA52C /* AppStateTests.swift */,
+			);
+			name = InfoMatrixShellTests;
+			path = ../Tests/InfoMatrixShellTests;
+			sourceTree = "<group>";
+		};
+		2AB8658561BB090107FED31B /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				CF02AD7BC013A916EBDF7A5B /* AppState.swift */,
+				94476E434BC313B3149EFC2F /* InfoMatrixApp.swift */,
+				0915017EE615206E08B378A4 /* InfoMatrixCore.h */,
+				1D8B726220713CAAA2918416 /* Models.swift */,
+				1032136E76B066EEBEE9E2C3 /* module.modulemap */,
+				F71DE9450536D7C5A0198E86 /* NativeReaderService.swift */,
+				C7E2035510E827770C55D39E /* ReaderService.swift */,
+				4B510BE0036ABB30DDBA9348 /* ReaderShellView.swift */,
+			);
+			name = Shared;
+			path = ../Shared;
+			sourceTree = "<group>";
+		};
+		2B05E59DDD224E7E1D882464 = {
+			isa = PBXGroup;
+			children = (
+				83EB9763F61DD127F6764553 /* App */,
+				088C4C3306D97A835A388129 /* InfoMatrixShellTests */,
+				2AB8658561BB090107FED31B /* Shared */,
+				B987678444E3B45DB24AEE3A /* XcodeApp */,
+				01C457E71BD177A4E286F8D3 /* XcodeApp */,
+				A6277E6C63B6ED4989D760E0 /* XcodeApp */,
+				D63B1CAE5C53217453B14AC4 /* Frameworks */,
+				6835F9CCC12B65DEC1F6512A /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		6835F9CCC12B65DEC1F6512A /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				1DE6DBD85A6B1122ED2AA64C /* InfoMatrix-iOS.app */,
+				94D61405EAEA8221D035D7FF /* InfoMatrix-iPadOS.app */,
+				12206CC399ADE389924FADBB /* InfoMatrix-macOS.app */,
+				AC5EE5B4830F9E5449B93570 /* InfoMatrixShell.framework */,
+				C52A12DB8C519F5D5007E15E /* InfoMatrixShellTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		83EB9763F61DD127F6764553 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				31F37F5FC609FBC1C7CCF19F /* NotificationDeliveryCoordinator.swift */,
+			);
+			name = App;
+			path = ../macOS/App;
+			sourceTree = "<group>";
+		};
+		A6277E6C63B6ED4989D760E0 /* XcodeApp */ = {
+			isa = PBXGroup;
+			children = (
+				00F64D960924A645E1FF233D /* MacApp.swift */,
+			);
+			name = XcodeApp;
+			path = ../macOS/XcodeApp;
+			sourceTree = "<group>";
+		};
+		B987678444E3B45DB24AEE3A /* XcodeApp */ = {
+			isa = PBXGroup;
+			children = (
+				0F93652CD9A6BD0554D517D0 /* iOSApp.swift */,
+			);
+			name = XcodeApp;
+			path = ../iOS/XcodeApp;
+			sourceTree = "<group>";
+		};
+		D63B1CAE5C53217453B14AC4 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				4D1DD56DBA5E67A387EE7C8E /* InfoMatrixCore.xcframework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXHeadersBuildPhase section */
+		97F9E9B0BA86E2EE7390B9A2 /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FAE899698AA44E5F677FFFA8 /* InfoMatrixCore.h in Headers */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXHeadersBuildPhase section */
+
+/* Begin PBXNativeTarget section */
+		4BE514304D78154F71325093 /* InfoMatrix-iOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F5D67EAE476B47DB8BD88A29 /* Build configuration list for PBXNativeTarget "InfoMatrix-iOS" */;
+			buildPhases = (
+				D9F1A509D4B33D81E54AA58F /* Sources */,
+				80CD685181AA0482E69D29B8 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "InfoMatrix-iOS";
+			packageProductDependencies = (
+			);
+			productName = "InfoMatrix-iOS";
+			productReference = 1DE6DBD85A6B1122ED2AA64C /* InfoMatrix-iOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+		50A4FB892F5B33A114FFB734 /* InfoMatrix-iPadOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = EB549D24C870B880C3F93AF1 /* Build configuration list for PBXNativeTarget "InfoMatrix-iPadOS" */;
+			buildPhases = (
+				3B5E24836B7327B31D108BA5 /* Sources */,
+				C0563708449F588A300AEAE6 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "InfoMatrix-iPadOS";
+			packageProductDependencies = (
+			);
+			productName = "InfoMatrix-iPadOS";
+			productReference = 94D61405EAEA8221D035D7FF /* InfoMatrix-iPadOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+		7FB0985FF97A53B8A636238F /* InfoMatrixShell */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1A63FE65B611B675D5F27D8B /* Build configuration list for PBXNativeTarget "InfoMatrixShell" */;
+			buildPhases = (
+				97F9E9B0BA86E2EE7390B9A2 /* Headers */,
+				B7E5B5F74BEE3301C6E276CD /* Sources */,
+				7A082A122B5057D7306E2233 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = InfoMatrixShell;
+			packageProductDependencies = (
+			);
+			productName = InfoMatrixShell;
+			productReference = AC5EE5B4830F9E5449B93570 /* InfoMatrixShell.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+		D75EE75710DCB9ACD26AA3C6 /* InfoMatrix-macOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = EBAE00668452723F32092709 /* Build configuration list for PBXNativeTarget "InfoMatrix-macOS" */;
+			buildPhases = (
+				A42DCF0F18689BACB9298F09 /* Sources */,
+				663B8FD1E7E3C07065D8EEF1 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "InfoMatrix-macOS";
+			packageProductDependencies = (
+			);
+			productName = "InfoMatrix-macOS";
+			productReference = 12206CC399ADE389924FADBB /* InfoMatrix-macOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+		FD9F6C1F51BBA74DCFE0B67E /* InfoMatrixShellTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D16043BE83F7227806CFDDA0 /* Build configuration list for PBXNativeTarget "InfoMatrixShellTests" */;
+			buildPhases = (
+				7C4D4A2CFFFAEE37912799D9 /* Sources */,
+				25EFC6CBED5542652289A0A7 /* Frameworks */,
+				2C38B1AAE83E87378D226235 /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B5D1CA156CB97C972A53FFB9 /* PBXTargetDependency */,
+			);
+			name = InfoMatrixShellTests;
+			packageProductDependencies = (
+			);
+			productName = InfoMatrixShellTests;
+			productReference = C52A12DB8C519F5D5007E15E /* InfoMatrixShellTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		7199B7B6A9EF77023D7BBBA0 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+				};
+			};
+			buildConfigurationList = 058B567AD9A073CAE88212D7 /* Build configuration list for PBXProject "InfoMatrix" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 2B05E59DDD224E7E1D882464;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 6835F9CCC12B65DEC1F6512A /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				4BE514304D78154F71325093 /* InfoMatrix-iOS */,
+				50A4FB892F5B33A114FFB734 /* InfoMatrix-iPadOS */,
+				D75EE75710DCB9ACD26AA3C6 /* InfoMatrix-macOS */,
+				7FB0985FF97A53B8A636238F /* InfoMatrixShell */,
+				FD9F6C1F51BBA74DCFE0B67E /* InfoMatrixShellTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		3B5E24836B7327B31D108BA5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5DB783E55FCC1366D27BE873 /* AppState.swift in Sources */,
+				636B69F470A1FBE7C72DB671 /* InfoMatrixApp.swift in Sources */,
+				9A5F31BA0E649F26DDAC1109 /* Models.swift in Sources */,
+				9332ADBF1DE5DF98FF197564 /* NativeReaderService.swift in Sources */,
+				87F537454C3DD50F52E78E09 /* ReaderService.swift in Sources */,
+				83C81C6AAF53A1C89C5DD1F2 /* ReaderShellView.swift in Sources */,
+				37B96D9C63782E58BDCBC17C /* iPadApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7C4D4A2CFFFAEE37912799D9 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6B466402492C3FD2731FB08C /* AppStateTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A42DCF0F18689BACB9298F09 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FC12D8C49863ACED56BFC03B /* AppState.swift in Sources */,
+				BD5A718556EAA5ADFBFB50DD /* InfoMatrixApp.swift in Sources */,
+				435AF79E69CF66C6231F615C /* MacApp.swift in Sources */,
+				C73D7BF652A230937E29CA0C /* Models.swift in Sources */,
+				47410D2A85626BD4E1DAEA78 /* NativeReaderService.swift in Sources */,
+				80319543E0E0F107C534F6FC /* NotificationDeliveryCoordinator.swift in Sources */,
+				1386D7D8EED89606320E4C0C /* ReaderService.swift in Sources */,
+				BCA6557651712126920DABFA /* ReaderShellView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B7E5B5F74BEE3301C6E276CD /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BB38519ED74E9C7735834A76 /* AppState.swift in Sources */,
+				BB61F5CA85A90F9633EA420D /* InfoMatrixApp.swift in Sources */,
+				D22BDD8AD9DAA7035E03F666 /* Models.swift in Sources */,
+				8350F5A1D0CCCE47B62C2C76 /* NativeReaderService.swift in Sources */,
+				94EF842D9F837B63F4B6A8C5 /* ReaderService.swift in Sources */,
+				9CC16FDD6A89BB58DB4449A6 /* ReaderShellView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D9F1A509D4B33D81E54AA58F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DCCD6211B9F97F64C0406674 /* AppState.swift in Sources */,
+				FC3D567A45A362FB0F8E9454 /* InfoMatrixApp.swift in Sources */,
+				C497371737BCA72742494211 /* Models.swift in Sources */,
+				8B6F6822EFBF7473E32BD9EB /* NativeReaderService.swift in Sources */,
+				7433BD66588705A77E458AA9 /* ReaderService.swift in Sources */,
+				1C4803D96D9930061E4B0D4E /* ReaderShellView.swift in Sources */,
+				5B07608B43AA41F9BC8C6E43 /* iOSApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		B5D1CA156CB97C972A53FFB9 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 7FB0985FF97A53B8A636238F /* InfoMatrixShell */;
+			targetProxy = 90D3FF5ED2300CD1BD2FA093 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		0E2863B0B4D2738DDCAC3A52 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"../Frameworks\"",
+				);
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = InfoMatrix;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.infomatrix.reader.ios;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		250773D7236762EB94DB9064 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"../Frameworks\"",
+				);
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = InfoMatrix;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.infomatrix.reader.ipad;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 2;
+			};
+			name = Debug;
+		};
+		3515CC73F7B4DFC72E869DB0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		3A0ABD8E570395B6C807759C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"../Frameworks\"",
+				);
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = InfoMatrix;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.infomatrix.reader.ios;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		540424C2F3C88A45BD610439 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"../Frameworks\"",
+				);
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = InfoMatrix;
+				INFOPLIST_KEY_LSMinimumSystemVersion = 14.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.infomatrix.reader.macos;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		9726E8802C1C881DC780B200 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"../Frameworks\"",
+				);
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = InfoMatrix;
+				INFOPLIST_KEY_LSMinimumSystemVersion = 14.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.infomatrix.reader.macos;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		B3E6F47BCD03AAA8E8B3EA49 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"../Frameworks\"",
+				);
+				GENERATE_INFOPLIST_FILE = YES;
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.infomatrix.shell;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Debug;
+		};
+		BB220FE5AFA1E2113332288A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		CCE73C77C187B272F423D74F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		E5516DA47C391114405CDDF9 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"../Frameworks\"",
+				);
+				GENERATE_INFOPLIST_FILE = YES;
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.infomatrix.shell;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Release;
+		};
+		E895E594A62958635E84E2A0 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"../Frameworks\"",
+				);
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = InfoMatrix;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.infomatrix.reader.ipad;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 2;
+			};
+			name = Release;
+		};
+		FEA2D1DA7CF29136A80F0B97 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		058B567AD9A073CAE88212D7 /* Build configuration list for PBXProject "InfoMatrix" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3515CC73F7B4DFC72E869DB0 /* Debug */,
+				FEA2D1DA7CF29136A80F0B97 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		1A63FE65B611B675D5F27D8B /* Build configuration list for PBXNativeTarget "InfoMatrixShell" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B3E6F47BCD03AAA8E8B3EA49 /* Debug */,
+				E5516DA47C391114405CDDF9 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		D16043BE83F7227806CFDDA0 /* Build configuration list for PBXNativeTarget "InfoMatrixShellTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BB220FE5AFA1E2113332288A /* Debug */,
+				CCE73C77C187B272F423D74F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		EB549D24C870B880C3F93AF1 /* Build configuration list for PBXNativeTarget "InfoMatrix-iPadOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				250773D7236762EB94DB9064 /* Debug */,
+				E895E594A62958635E84E2A0 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		EBAE00668452723F32092709 /* Build configuration list for PBXNativeTarget "InfoMatrix-macOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				540424C2F3C88A45BD610439 /* Debug */,
+				9726E8802C1C881DC780B200 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		F5D67EAE476B47DB8BD88A29 /* Build configuration list for PBXNativeTarget "InfoMatrix-iOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3A0ABD8E570395B6C807759C /* Debug */,
+				0E2863B0B4D2738DDCAC3A52 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 7199B7B6A9EF77023D7BBBA0 /* Project object */;
+}

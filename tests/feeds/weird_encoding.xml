@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<rss version="2.0">
+  <channel>
+    <title>Encoding Test</title>
+    <link>https://example.com/</link>
+    <description>Test</description>
+    <item>
+      <title>Item with accents</title>
+      <guid>enc-1</guid>
+    </item>
+  </channel>
+</rss>

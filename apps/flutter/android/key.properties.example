@@ -1,0 +1,5 @@
+# Copy this file to `key.properties` and fill in your release signing values.
+storeFile=upload-keystore.jks
+storePassword=change-me
+keyAlias=upload
+keyPassword=change-me

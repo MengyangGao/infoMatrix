@@ -1,0 +1,31 @@
+[package]
+name = "ffi_bridge"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lib]
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[dependencies]
+app_core = { path = "../app_core" }
+discovery = { path = "../discovery" }
+fetcher = { path = "../fetcher" }
+models = { path = "../models" }
+notifications = { path = "../notifications" }
+opml = { path = "../opml" }
+parser = { path = "../parser" }
+ammonia = "4"
+chrono.workspace = true
+scraper.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+uuid.workspace = true
+storage = { path = "../storage" }
+tokio.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+tempfile = "3"

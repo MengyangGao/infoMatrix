@@ -1,0 +1,24 @@
+[package]
+name = "app_core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+discovery = { path = "../discovery" }
+fetcher = { path = "../fetcher" }
+icon = { path = "../icon" }
+models = { path = "../models" }
+opml = { path = "../opml" }
+parser = { path = "../parser" }
+search = { path = "../search" }
+storage = { path = "../storage" }
+sync = { path = "../sync" }
+thiserror.workspace = true
+url.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+async-trait.workspace = true
+tokio.workspace = true

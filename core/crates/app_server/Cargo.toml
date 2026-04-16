@@ -1,0 +1,37 @@
+[package]
+name = "app_server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+ammonia = "4"
+app_core = { path = "../app_core" }
+axum.workspace = true
+chrono.workspace = true
+fetcher = { path = "../fetcher" }
+icon = { path = "../icon" }
+models = { path = "../models" }
+notifications = { path = "../notifications" }
+opml = { path = "../opml" }
+parser = { path = "../parser" }
+pulldown-cmark = "0.13"
+reqwest.workspace = true
+scraper.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+storage = { path = "../storage" }
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+url.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+http-body-util = "0.1"
+serde_json.workspace = true
+tempfile = "3"
+tower = { version = "0.5", features = ["util"] }

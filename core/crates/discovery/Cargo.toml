@@ -1,0 +1,18 @@
+[package]
+name = "discovery"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+models = { path = "../models" }
+parser = { path = "../parser" }
+reqwest.workspace = true
+scraper.workspace = true
+thiserror.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true

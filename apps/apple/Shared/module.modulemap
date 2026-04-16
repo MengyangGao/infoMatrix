@@ -1,0 +1,4 @@
+module InfoMatrixCore {
+    header "InfoMatrixCore.h"
+    export *
+}
