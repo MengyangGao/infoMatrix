@@ -9,10 +9,11 @@ Ship InfoMatrix as a stable local-first reader with matched Apple and Flutter be
 - macOS users can also install the app through the project-owned Homebrew cask tap:
   - `brew tap MengyangGao/infomatrix https://github.com/MengyangGao/infoMatrix`
   - `brew install --cask infomatrix`
-- The release workflow publishes installable user-facing bundles for macOS, Windows, Linux, and Android.
-- iOS is handled separately through the App Store/TestFlight path and is not published as a GitHub Release download.
+- The release workflow already produces platform bundles for macOS, iOS, Windows, Linux, and Android.
 - Artifact names are intentionally stable so users can learn one download path per platform:
   - macOS: `InfoMatrix-macos.dmg`, `InfoMatrix-macos.zip`
+  - iOS simulator: `InfoMatrix-iOS-simulator.zip`
+  - iOS device: `InfoMatrix-iOS.ipa` when signing inputs are present
   - Windows: `InfoMatrix-windows-x64.msix`, `InfoMatrix-windows-x64.zip`
   - Linux: `InfoMatrix-linux-x64.deb`
   - Android: `InfoMatrix-android.apk`, `InfoMatrix-android.aab`
@@ -37,11 +38,11 @@ Ship InfoMatrix as a stable local-first reader with matched Apple and Flutter be
   - `dist/releases/macos/InfoMatrix-macos.dmg`
   - `dist/releases/macos/InfoMatrix-macos.zip`
 - If `INFOMATRIX_MACOS_SIGNING_IDENTITY` is set, the app bundle is signed with that identity; if `INFOMATRIX_MACOS_NOTARIZE=1` is also set, the script requires either `INFOMATRIX_MACOS_NOTARY_PROFILE` or the Apple ID/password/team variables and staples the notarization ticket before packaging.
-- GitHub Actions requires Apple signing assets from the secrets `INFOMATRIX_APPLE_CERTS_P12_B64`, `INFOMATRIX_APPLE_CERTS_PASSWORD`, `INFOMATRIX_APPLE_KEYCHAIN_PASSWORD`, and `INFOMATRIX_MACOS_SIGNING_IDENTITY` before a tagged release can publish macOS artifacts.
+- GitHub Actions can import Apple signing assets from the secrets `INFOMATRIX_APPLE_CERTS_P12_B64`, `INFOMATRIX_APPLE_CERTS_PASSWORD`, `INFOMATRIX_APPLE_KEYCHAIN_PASSWORD`, and `INFOMATRIX_IOS_PROVISIONING_PROFILE_B64` when you want signed macOS or iOS device release artifacts.
 - The iOS packaging script emits a simulator app bundle for local testing:
   - `dist/InfoMatrix-iOS.app`
   - `dist/releases/ios/InfoMatrix-iOS-simulator.zip`
-- If `INFOMATRIX_IOS_DEVICE_RELEASE=1` is set together with `INFOMATRIX_IOS_TEAM_ID` and `INFOMATRIX_IOS_EXPORT_METHOD`, the script also emits a device archive and IPA for TestFlight or App Store Connect:
+- If `INFOMATRIX_IOS_DEVICE_RELEASE=1` is set together with `INFOMATRIX_IOS_TEAM_ID` and `INFOMATRIX_IOS_EXPORT_METHOD`, the script also emits:
   - `dist/releases/ios/InfoMatrix-iOS.xcarchive`
   - `dist/releases/ios/InfoMatrix-iOS.ipa`
   If you need a custom export profile, provide `INFOMATRIX_IOS_EXPORT_OPTIONS_PLIST` and the script will use it instead of generating a minimal plist.
@@ -49,8 +50,8 @@ Ship InfoMatrix as a stable local-first reader with matched Apple and Flutter be
 - Android release packaging emits:
   - `dist/releases/android/InfoMatrix-android.apk`
   - `dist/releases/android/InfoMatrix-android.aab`
-  The APK is the direct-install package; the AAB is for store-style distribution. Release signing requires `apps/flutter/android/key.properties`.
-- In GitHub Actions, Android signing can be supplied from `INFOMATRIX_ANDROID_KEYSTORE_B64`, `INFOMATRIX_ANDROID_KEYSTORE_PASSWORD`, `INFOMATRIX_ANDROID_KEY_ALIAS`, and `INFOMATRIX_ANDROID_KEY_PASSWORD`. Tagged releases fail fast if those inputs are missing.
+  The APK is the direct-install package; the AAB is for store-style distribution. Release signing requires `apps/flutter/android/key.properties` unless `INFOMATRIX_ANDROID_ALLOW_DEBUG_SIGNING=1` is set explicitly for a smoke-only build.
+- In GitHub Actions, Android signing can be supplied from `INFOMATRIX_ANDROID_KEYSTORE_B64`, `INFOMATRIX_ANDROID_KEYSTORE_PASSWORD`, `INFOMATRIX_ANDROID_KEY_ALIAS`, and `INFOMATRIX_ANDROID_KEY_PASSWORD`.
 - Windows release packaging emits:
   - `dist/releases/windows/InfoMatrix-windows-x64.msix`
   - `dist/releases/windows/InfoMatrix-windows-x64.zip`
@@ -62,8 +63,7 @@ Ship InfoMatrix as a stable local-first reader with matched Apple and Flutter be
 - `tooling/scripts/release_check.sh` is the preferred local gate before tagging a release because it runs the Rust, Apple, and Flutter checks in one place.
 - The Apple script path is intended to validate macOS and iOS on this workstation; visionOS remains a follow-up slice until the Rust XCFramework includes a supported visionOS variant.
 - GitHub Release publication is automated by `.github/workflows/release.yml` on `v*` tags.
-- Official `v*` tags now fail fast if the Apple signing and notarization prerequisites are missing. Tagged releases should not publish ad-hoc macOS bundles or simulator-only stand-ins.
-- Official `v*` tags also fail fast if Android release signing material is missing. Tagged releases should not publish debug-signed Android packages.
+- Official `v*` tags prefer signed release assets when secrets are available. If the signing material is missing, the workflow falls back to smoke artifacts so GitHub Release still gets populated, but those artifacts are not equivalent to store-ready builds.
 - Each platform release directory now includes a platform-specific `InfoMatrix-*.SHA256SUMS` file so users can verify downloaded artifacts before installation.
 
 ## Smoke Scenarios
@@ -94,7 +94,7 @@ Set `INFOMATRIX_MACOS_SIGNING_IDENTITY` and `INFOMATRIX_MACOS_NOTARIZE=1` to pro
 ```bash
 tooling/scripts/package_ios_release.sh
 ```
-The script leaves `dist/InfoMatrix-iOS.app` in place and zips the same bundle under `dist/releases/ios/InfoMatrix-iOS-simulator.zip`. Use it for simulator smoke checks, not device installation. It is not published as a public GitHub Release asset.
+The script leaves `dist/InfoMatrix-iOS.app` in place and zips the same bundle under `dist/releases/ios/InfoMatrix-iOS-simulator.zip`. Use it for simulator smoke checks, not device installation.
 Set `INFOMATRIX_IOS_DEVICE_RELEASE=1` together with `INFOMATRIX_IOS_TEAM_ID` and `INFOMATRIX_IOS_EXPORT_METHOD` to also build a device archive and export an IPA for TestFlight or App Store Connect.
 
 ### Windows

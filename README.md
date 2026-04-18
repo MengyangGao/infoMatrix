@@ -42,8 +42,9 @@ Recommended packages by platform:
 - Windows: `InfoMatrix-windows-x64.msix` for normal installation, or `InfoMatrix-windows-x64.zip` for manual unpacking
 - Linux: `InfoMatrix-linux-x64.deb`
 - Android: `InfoMatrix-android.apk` for direct install, or `InfoMatrix-android.aab` for Play-style distribution
+- iOS simulator: `InfoMatrix-iOS-simulator.zip`
 
-The release workflow only publishes installable user-facing artifacts. macOS releases are signed and notarized before being published, and iOS is reserved for a later App Store/TestFlight distribution path rather than the GitHub Releases page. The release page includes checksum files for every published platform bundle.
+When signing assets are available, the release workflow also publishes installable Apple device artifacts. The release page includes the checksum files for every platform bundle.
 
 ## What You Can Do
 

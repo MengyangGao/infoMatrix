@@ -12,5 +12,5 @@ SwiftUI shell scaffolding lives in `apps/apple/Shared` and links the Rust core t
 - For a focused macOS build, use `xcodebuild -project apps/apple/XcodeGen/InfoMatrix.xcodeproj -scheme InfoMatrix-macOS -configuration Release -destination 'platform=macOS' build`.
 - For a macOS release bundle, run `tooling/scripts/package_macos_release.sh` and distribute `dist/releases/macos/InfoMatrix-macos.dmg`.
 - The GitHub Releases page is the public download surface for macOS users, with `InfoMatrix-macos.dmg` as the normal install path and `InfoMatrix-macos.zip` as the fallback bundle.
-- Tagged releases must be Developer ID signed and notarized before they are published. The release workflow now fails fast if `INFOMATRIX_MACOS_SIGNING_IDENTITY` or the notarization credentials are missing.
+- Set `INFOMATRIX_MACOS_SIGNING_IDENTITY` for Developer ID signing and `INFOMATRIX_MACOS_NOTARIZE=1` for notarized release bundles. Provide either `INFOMATRIX_MACOS_NOTARY_PROFILE` or the Apple ID / password / team variables before running an official release.
 - The native bridge removes the old localhost-server dependency, but App Store delivery still needs standard Apple release work such as icons, privacy metadata, and signing/notarization validation.
