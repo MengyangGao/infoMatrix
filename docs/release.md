@@ -9,14 +9,14 @@ Ship InfoMatrix as a stable local-first reader with matched Apple and Flutter be
 - macOS users can also install the app through the project-owned Homebrew cask tap:
   - `brew tap MengyangGao/infomatrix https://github.com/MengyangGao/infoMatrix`
   - `brew install --cask infomatrix`
-- The release workflow already produces platform bundles for macOS, iOS, Windows, Linux, and Android.
+- The release workflow publishes installable bundles for macOS, iOS, Windows, and Linux.
+- Android packaging remains available for manual smoke builds and store preparation, but it is not published as part of tagged GitHub Releases.
 - Artifact names are intentionally stable so users can learn one download path per platform:
   - macOS: `InfoMatrix-macos.dmg`, `InfoMatrix-macos.zip`
   - iOS simulator: `InfoMatrix-iOS-simulator.zip`
   - iOS device: `InfoMatrix-iOS.ipa` when signing inputs are present
   - Windows: `InfoMatrix-windows-x64.msix`, `InfoMatrix-windows-x64.zip`
   - Linux: `InfoMatrix-linux-x64.deb`
-  - Android: `InfoMatrix-android.apk`, `InfoMatrix-android.aab`
 - Checksum files are published next to each platform bundle so downloads can be verified before installation.
 
 ## Required Checks
@@ -50,8 +50,8 @@ Ship InfoMatrix as a stable local-first reader with matched Apple and Flutter be
 - Android release packaging emits:
   - `dist/releases/android/InfoMatrix-android.apk`
   - `dist/releases/android/InfoMatrix-android.aab`
-  The APK is the direct-install package; the AAB is for store-style distribution. Release signing requires `apps/flutter/android/key.properties` unless `INFOMATRIX_ANDROID_ALLOW_DEBUG_SIGNING=1` is set explicitly for a smoke-only build.
-- In GitHub Actions, Android signing can be supplied from `INFOMATRIX_ANDROID_KEYSTORE_B64`, `INFOMATRIX_ANDROID_KEYSTORE_PASSWORD`, `INFOMATRIX_ANDROID_KEY_ALIAS`, and `INFOMATRIX_ANDROID_KEY_PASSWORD`.
+  The APK is the direct-install package; the AAB is for store-style distribution. Release signing requires `apps/flutter/android/key.properties`. This path is for manual smoke builds or Play Console prep, not for tagged GitHub Releases.
+- In GitHub Actions, Android signing can be supplied from `INFOMATRIX_ANDROID_KEYSTORE_B64`, `INFOMATRIX_ANDROID_KEYSTORE_PASSWORD`, `INFOMATRIX_ANDROID_KEY_ALIAS`, and `INFOMATRIX_ANDROID_KEY_PASSWORD` when you run the Android packaging path manually.
 - Windows release packaging emits:
   - `dist/releases/windows/InfoMatrix-windows-x64.msix`
   - `dist/releases/windows/InfoMatrix-windows-x64.zip`
@@ -107,7 +107,7 @@ Install `dist/releases/windows/InfoMatrix-windows-x64.msix` directly for the eas
 ```bash
 tooling/scripts/package_flutter_android_release.sh
 ```
-Install `dist/releases/android/InfoMatrix-android.apk` directly on a phone, or upload `dist/releases/android/InfoMatrix-android.aab` to Play Console later. Create `apps/flutter/android/key.properties` for release signing, or set `INFOMATRIX_ANDROID_ALLOW_DEBUG_SIGNING=1` only when you need an explicit smoke-only package.
+Use `dist/releases/android/InfoMatrix-android.apk` for direct-install smoke testing, or upload `dist/releases/android/InfoMatrix-android.aab` to Play Console later. Create `apps/flutter/android/key.properties` for release signing, or set `INFOMATRIX_ANDROID_ALLOW_DEBUG_SIGNING=1` only when you need an explicit smoke-only package.
 
 ### Linux
 ```bash

@@ -41,10 +41,9 @@ Recommended packages by platform:
 - macOS: `InfoMatrix-macos.dmg` for normal installation, or `InfoMatrix-macos.zip` for manual distribution
 - Windows: `InfoMatrix-windows-x64.msix` for normal installation, or `InfoMatrix-windows-x64.zip` for manual unpacking
 - Linux: `InfoMatrix-linux-x64.deb`
-- Android: `InfoMatrix-android.apk` for direct install, or `InfoMatrix-android.aab` for Play-style distribution
 - iOS simulator: `InfoMatrix-iOS-simulator.zip`
 
-When signing assets are available, the release workflow also publishes installable Apple device artifacts. The release page includes the checksum files for every platform bundle.
+Android packaging remains available for manual smoke builds and store preparation, but it is not published as part of tagged GitHub Releases. When signing assets are available, the release workflow also publishes installable Apple device artifacts. The release page includes the checksum files for every published platform bundle.
 
 ## What You Can Do
 

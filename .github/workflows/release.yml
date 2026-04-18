@@ -287,6 +287,7 @@ jobs:
           if-no-files-found: error
 
   android:
+    if: github.ref_type != 'tag' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -373,7 +374,6 @@ jobs:
   publish:
     needs:
       - apple
-      - android
       - windows
       - linux
     if: startsWith(github.ref, 'refs/tags/v')
@@ -403,12 +403,6 @@ jobs:
           name: linux-release
           path: dist/releases/linux
 
-      - name: Download Android artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: android-release
-          path: dist/releases/android
-
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -420,12 +414,9 @@ jobs:
             dist/releases/ios/*.zip
             dist/releases/ios/*.SHA256SUMS
             dist/releases/windows/*.msix
-            dist/releases/android/*.apk
-            dist/releases/android/*.aab
-            dist/releases/android/*.SHA256SUMS
             dist/releases/windows/*.zip
             dist/releases/windows/*.SHA256SUMS
             dist/releases/linux/*.deb
             dist/releases/linux/*.SHA256SUMS
           generate_release_notes: true
-          fail_on_unmatched_files: false
+          fail_on_unmatched_files: true
