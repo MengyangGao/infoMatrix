@@ -88,6 +88,13 @@ echo "[1/3] Building Apple XCFramework..."
 echo "[1.5/3] Generating Xcode project..."
 (cd "${ROOT_DIR}/apps/apple/XcodeGen" && xcodegen)
 
+if [[ ! -d "${APPLE_PROJECT}" ]]; then
+  echo "Error: Xcode project not found at ${APPLE_PROJECT}" >&2
+  echo "Contents of ${ROOT_DIR}/apps/apple/XcodeGen:" >&2
+  ls -R "${ROOT_DIR}/apps/apple/XcodeGen" >&2
+  exit 1
+fi
+
 echo "[2/3] Building Apple macOS app bundle..."
 xcode_log="$(mktemp)"
 if ! (
