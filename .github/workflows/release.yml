@@ -10,6 +10,14 @@ permissions:
   contents: write
 
 jobs:
+  apple:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Install Flutter
         uses: subosito/flutter-action@v2
         with:
