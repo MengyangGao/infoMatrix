@@ -24,8 +24,11 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Install xcodegen
-        run: brew install xcodegen
+      - name: Install Mint
+        run: brew install mint
+
+      - name: Install XcodeGen
+        run: mint install yonaskolb/XcodeGen
 
       - name: Derive release version
         shell: bash

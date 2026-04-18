@@ -86,7 +86,7 @@ echo "[1/3] Building Apple XCFramework..."
 "${ROOT_DIR}/tooling/scripts/build_apple_xcframework.sh"
 
 echo "[1.5/3] Generating Xcode project..."
-(cd "${ROOT_DIR}/apps/apple/XcodeGen" && xcodegen)
+(cd "${ROOT_DIR}/apps/apple/XcodeGen" && mint run xcodegen)
 
 if [[ ! -d "${APPLE_PROJECT}" ]]; then
   echo "Error: Xcode project not found at ${APPLE_PROJECT}" >&2
