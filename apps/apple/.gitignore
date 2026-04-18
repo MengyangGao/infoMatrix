@@ -1,0 +1,5 @@
+# XcodeGen output
+*.xcodeproj
+.derivedData/
+*.xcworkspace
+*.xcuserdatad/

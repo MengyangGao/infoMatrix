@@ -12,6 +12,9 @@ DerivedData/
 .build/
 *.xcuserstate
 *.xcworkspace/xcuserdata/
+apps/apple/XcodeGen/*.xcodeproj
+apps/apple/XcodeGen/*.xcworkspace
+
 
 # Flutter/Dart
 .dart_tool/
