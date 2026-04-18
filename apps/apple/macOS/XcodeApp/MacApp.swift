@@ -8,9 +8,11 @@ struct InfoMatrixMacXcodeApp: App {
     init() {
         let dbPath = NativeReaderService.defaultDBPath()
         let service = NativeReaderService(dbPath: dbPath)
+        let syncCoordinator = CloudKitSyncCoordinator(service: service)
         _state = StateObject(
             wrappedValue: AppState(
-                service: service
+                service: service,
+                syncCoordinator: syncCoordinator
             )
         )
         _notificationCoordinator = StateObject(

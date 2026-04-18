@@ -33,10 +33,17 @@ char *infomatrix_core_get_global_notification_settings_json(const char *input);
 char *infomatrix_core_update_global_notification_settings_json(const char *input);
 char *infomatrix_core_get_feed_notification_settings_json(const char *input);
 char *infomatrix_core_update_feed_notification_settings_json(const char *input);
+char *infomatrix_core_get_feed_refresh_settings_json(const char *input);
+char *infomatrix_core_update_feed_refresh_settings_json(const char *input);
+char *infomatrix_core_delete_feed_refresh_settings_json(const char *input);
+char *infomatrix_core_get_group_refresh_settings_json(const char *input);
+char *infomatrix_core_update_group_refresh_settings_json(const char *input);
+char *infomatrix_core_delete_group_refresh_settings_json(const char *input);
 char *infomatrix_core_list_pending_notification_events_json(const char *input);
 char *infomatrix_core_ack_notification_events_json(const char *input);
 char *infomatrix_core_list_sync_events_json(const char *input);
 char *infomatrix_core_ack_sync_events_json(const char *input);
+char *infomatrix_core_apply_sync_events_json(const char *input);
 void infomatrix_core_free_string(char *ptr);
 
 #endif /* InfoMatrixCore_h */

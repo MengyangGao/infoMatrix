@@ -27,6 +27,25 @@ Rust owns discovery, parsing, fetching, persistence, refresh scheduling, and not
 SwiftUI provides the Apple shell through a native `InfoMatrixCore.xcframework` built from the Rust FFI bridge.
 Flutter powers the Windows, Linux, and Android shell through the same Rust core contract.
 
+## Download Releases
+
+Pre-built release artifacts are published through GitHub Releases:
+
+- [InfoMatrix Releases](https://github.com/MengyangGao/infoMatrix/releases)
+- macOS users can also install through Homebrew:
+  - `brew tap MengyangGao/infomatrix https://github.com/MengyangGao/infoMatrix`
+  - `brew install --cask infomatrix`
+
+Recommended packages by platform:
+
+- macOS: `InfoMatrix-macos.dmg` for normal installation, or `InfoMatrix-macos.zip` for manual distribution
+- Windows: `InfoMatrix-windows-x64.msix` for normal installation, or `InfoMatrix-windows-x64.zip` for manual unpacking
+- Linux: `InfoMatrix-linux-x64.deb`
+- Android: `InfoMatrix-android.apk` for direct install, or `InfoMatrix-android.aab` for Play-style distribution
+- iOS simulator: `InfoMatrix-iOS-simulator.zip`
+
+When signing assets are available, the release workflow also publishes installable Apple device artifacts. The release page includes the checksum files for every platform bundle.
+
 ## What You Can Do
 
 - Subscribe to feeds by pasting a feed URL or a website URL.
@@ -100,9 +119,23 @@ tooling/scripts/package_macos_app.sh
 open dist/InfoMatrix.app
 ```
 
+For a full local release-style check:
+
+```bash
+tooling/scripts/release_check.sh
+```
+
+## Screenshots
+
+Apple shell:
+
+<img src="assets/README/macos-main.png" alt="InfoMatrix macOS shell" />
+
+The Flutter shell shares the same Rust core contract on Windows, Linux, and Android. Platform-specific screenshots will be added as those release builds are captured.
+
 ## Release Readiness
 
 - Core behavior is covered by Rust workspace tests.
 - Apple and Flutter shells should stay aligned to the same Rust-backed service contracts.
-- Release notes and platform notes live in `docs/` and the app-specific README files.
+- Release notes, target notes, and packaging details live in `docs/` and the app-specific README files.
 - Before shipping, run the workspace tests and the relevant platform smoke checks for the target shell.

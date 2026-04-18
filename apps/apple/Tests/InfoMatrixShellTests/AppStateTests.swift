@@ -32,6 +32,8 @@ private actor MockReaderService: ReaderService {
         )
     )
     var notificationSettingsByFeed: [String: NotificationSettings] = [:]
+    var feedRefreshSettingsByFeed: [String: RefreshSettings] = [:]
+    var groupRefreshSettingsByGroup: [String: RefreshSettings] = [:]
     var pendingNotificationEvents: [NotificationEvent] = []
     var acknowledgedNotificationEventIDs: [String] = []
 
@@ -139,6 +141,14 @@ private actor MockReaderService: ReaderService {
 
     func setDiscoverError(_ error: NSError?) {
         discoverError = error
+    }
+
+    func setFeeds(_ newFeeds: [Feed]) {
+        feeds = newFeeds
+    }
+
+    func setGroups(_ newGroups: [FeedGroup]) {
+        groups = newGroups
     }
 
     func setListGroupsError(_ error: NSError?) {
@@ -271,6 +281,40 @@ private actor MockReaderService: ReaderService {
     ) async throws -> NotificationSettings {
         notificationSettingsByFeed[feedID] = settings
         return settings
+    }
+
+    func getFeedRefreshSettings(feedID: String) async throws -> RefreshSettings {
+        feedRefreshSettingsByFeed[feedID] ?? RefreshSettings()
+    }
+
+    func updateFeedRefreshSettings(
+        feedID: String,
+        settings: RefreshSettings
+    ) async throws -> RefreshSettings {
+        feedRefreshSettingsByFeed[feedID] = settings
+        return settings
+    }
+
+    func deleteFeedRefreshSettings(feedID: String) async throws -> RefreshSettings {
+        feedRefreshSettingsByFeed.removeValue(forKey: feedID)
+        return feedRefreshSettingsByFeed[feedID] ?? RefreshSettings()
+    }
+
+    func getGroupRefreshSettings(groupID: String) async throws -> RefreshSettings {
+        groupRefreshSettingsByGroup[groupID] ?? RefreshSettings()
+    }
+
+    func updateGroupRefreshSettings(
+        groupID: String,
+        settings: RefreshSettings
+    ) async throws -> RefreshSettings {
+        groupRefreshSettingsByGroup[groupID] = settings
+        return settings
+    }
+
+    func deleteGroupRefreshSettings(groupID: String) async throws -> RefreshSettings {
+        groupRefreshSettingsByGroup.removeValue(forKey: groupID)
+        return groupRefreshSettingsByGroup[groupID] ?? RefreshSettings()
     }
 
     func listPendingNotificationEvents(limit: Int) async throws -> [NotificationEvent] {
@@ -424,6 +468,10 @@ private actor MockReaderService: ReaderService {
     func acknowledgeSyncEvents(eventIDs: [String]) async throws -> Int {
         0
     }
+
+    func applySyncEvents(_ events: [SyncEvent]) async throws -> Int {
+        events.count
+    }
 }
 
 @MainActor
@@ -444,6 +492,67 @@ final class AppStateTests: XCTestCase {
 
         XCTAssertEqual(state.feeds.count, 1)
         XCTAssertEqual(state.items.count, 1)
+    }
+
+    func testReaderScreenStateSummarizesSelectionAndSections() async {
+        let service = MockReaderService()
+        await service.setFeeds([
+            Feed(
+                id: "feed-1",
+                title: "Example Feed",
+                feedURL: URL(string: "https://example.com/feed.xml")!,
+                siteURL: URL(string: "https://example.com")!,
+                feedType: "rss",
+                autoFullText: true,
+                iconURL: nil,
+                groups: [FeedGroup(id: "group-1", name: "Tech")]
+            )
+        ])
+        await service.setGroups([FeedGroup(id: "group-1", name: "Tech")])
+        await service.setFeedItems(
+            "feed-1",
+            items: [
+                ArticleItem(
+                    id: "item-1",
+                    title: "Hello InfoMatrix",
+                    canonicalURL: URL(string: "https://example.com/post"),
+                    publishedAt: "2026-01-01T00:00:00Z",
+                    isRead: false,
+                    isStarred: false,
+                    isSavedForLater: false,
+                    isArchived: false
+                )
+            ]
+        )
+        await service.setItemDetail(
+            "item-1",
+            detail: ArticleDetail(
+                id: "item-1",
+                title: "Hello InfoMatrix",
+                kind: "article",
+                sourceKind: "feed",
+                sourceID: "feed-1",
+                sourceURL: URL(string: "https://example.com/feed.xml"),
+                canonicalURL: URL(string: "https://example.com/post"),
+                publishedAt: "2026-01-01T00:00:00Z",
+                summary: "Summary",
+                contentHTML: nil,
+                contentText: "Body",
+                isRead: false,
+                isStarred: false,
+                isSavedForLater: false,
+                isArchived: false
+            )
+        )
+
+        let state = AppState(service: service)
+        await state.bootstrap()
+
+        let screen = state.readerScreenState
+        XCTAssertEqual(screen.headerTitle, "全部")
+        XCTAssertEqual(screen.sidebarSections.count, 3)
+        XCTAssertEqual(screen.sidebarSections.first?.rows.first?.title, "全部")
+        XCTAssertEqual(screen.sidebarSections.last?.rows.first?.title, "Example Feed")
     }
 
     func testAppleSubscriptionComposerUsesDirectFeedFlowForFeedUrls() async {
@@ -908,6 +1017,43 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(loadedGlobal?.backgroundRefreshEnabled, false)
         let loadedFeed = await state.loadFeedNotificationSettings(feedID: feed.id)
         XCTAssertEqual(loadedFeed?.mode, .digest)
+    }
+
+    func testRefreshSettingsRoundTrip() async {
+        let service = MockReaderService()
+        let state = AppState(service: service)
+
+        await state.addSubscription(input: "https://example.com")
+        await state.bootstrap()
+
+        guard let feed = state.feeds.first else {
+            XCTFail("Missing feed")
+            return
+        }
+
+        let group = await state.createGroup("Tech")
+        XCTAssertNotNil(group)
+
+        if let group {
+            await state.setFeedGroup(feed.id, groupID: group.id)
+
+            let feedSettings = RefreshSettings(enabled: false, intervalMinutes: 45)
+            let savedFeed = await state.saveFeedRefreshSettings(feedID: feed.id, settings: feedSettings)
+            XCTAssertTrue(savedFeed)
+            let loadedFeedSettings = await state.loadFeedRefreshSettings(feedID: feed.id)
+            XCTAssertEqual(loadedFeedSettings, feedSettings)
+
+            let groupSettings = RefreshSettings(enabled: true, intervalMinutes: 90)
+            let savedGroup = await state.saveGroupRefreshSettings(groupID: group.id, settings: groupSettings)
+            XCTAssertTrue(savedGroup)
+            let loadedGroupSettings = await state.loadGroupRefreshSettings(groupID: group.id)
+            XCTAssertEqual(loadedGroupSettings, groupSettings)
+
+            let resetFeed = await state.resetFeedRefreshSettings(feedID: feed.id)
+            XCTAssertTrue(resetFeed)
+            let resetGroup = await state.resetGroupRefreshSettings(groupID: group.id)
+            XCTAssertTrue(resetGroup)
+        }
     }
 
     func testGroupSelectionAggregatesFeedItems() async {

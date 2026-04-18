@@ -68,11 +68,21 @@ Each syncable row includes `created_at` and `updated_at`. `sync_events` acts as 
 
 Current `sync_events` usage:
 
-- `entity_type`: mutation domain (`item_state` currently wired)
-- `entity_id`: stable internal entity identifier
-- `event_type`: mutation kind (`updated` currently used for item state changes)
-- `payload_json`: structured before/after snapshot payload for deterministic replay
+- `entity_type`: mutation domain (`item_state`, `feed`, `feed_group`, `feed_membership`, `entry`, `entry_content`, `notification_settings`, `notification_globals`)
+- `entity_id`: stable internal entity identifier or stable URL identity
+- `event_type`: mutation kind (`created`, `updated`, `deleted`)
+- `payload_json`: structured replay payload shaped for the target adapter
 - `processed_at`: nullable queue marker used for local ack semantics
+
+The current replay payloads stay intentionally compact:
+
+- feed events carry feed URL, site URL, title, feed type, and auto full text preference
+- feed group events carry the group name
+- feed membership events carry feed URL and optional group name
+- entry events carry the serialized `NewEntry`
+- item state events carry item identity plus the current boolean state snapshot
+- notification settings events carry the feed URL and current settings blob
+- global notification settings events carry the current global settings blob
 
 Refresh attempts are also written to the dedicated refresh tables so next-run/backoff state remains inspectable even when the background refresh loop restarts.
 

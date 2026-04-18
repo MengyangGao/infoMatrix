@@ -395,6 +395,21 @@ impl Default for NotificationSettings {
     }
 }
 
+/// Auto-refresh preference for a feed or folder scope.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RefreshSettings {
+    /// Whether automatic refresh is enabled for the scope.
+    pub enabled: bool,
+    /// Refresh cadence in minutes when enabled.
+    pub interval_minutes: u32,
+}
+
+impl Default for RefreshSettings {
+    fn default() -> Self {
+        Self { enabled: true, interval_minutes: 15 }
+    }
+}
+
 /// Global defaults for refresh and notification behavior.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GlobalNotificationSettings {

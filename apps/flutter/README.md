@@ -12,6 +12,16 @@ Flutter shell backed by the shared Rust `app_core` orchestration layer through t
 - Mark read / starred / save-later / archive
 - Local SQLite persistence through Rust core
 
+## End-User Distribution
+
+The Flutter shell is the production path for Windows, Linux, and Android.
+
+- Windows users should install `InfoMatrix-windows-x64.msix`, or unpack `InfoMatrix-windows-x64.zip` if they need a portable bundle.
+- Linux users should install `InfoMatrix-linux-x64.deb`.
+- Android users should install `InfoMatrix-android.apk`, or use `InfoMatrix-android.aab` for Play-style distribution.
+
+These packages are published from the GitHub Releases page and are built from the same Rust core contract as the Apple shell.
+
 ## Build Rust FFI library
 
 From repository root:
@@ -55,6 +65,7 @@ export INFOMATRIX_FFI_LIB_PATH=/absolute/path/to/libffi_bridge.dylib
 - Keep `apps/flutter/lib/core/ffi_reader_backend.dart` aligned with the exported Rust FFI contract.
 - Use the Rust workspace tests as the source of truth for core behavior before packaging a Flutter build.
 - `tooling/scripts/release_check.sh` is the preferred local release gate because it runs Rust, Apple, and Flutter checks in one pass.
+- The release workflow publishes pre-built artifacts for Windows, Linux, and Android so new users do not need to compile Flutter locally.
 - For Android release signing, copy `apps/flutter/android/key.properties.example` to `apps/flutter/android/key.properties` and fill in the standard Gradle signing fields. If you need an explicit smoke-only package, set `INFOMATRIX_ANDROID_ALLOW_DEBUG_SIGNING=1`; otherwise the release build requires real signing material.
 - Release packaging helpers:
   - `tooling/scripts/package_flutter_android_release.sh` creates `dist/releases/android/InfoMatrix-android.apk` and `dist/releases/android/InfoMatrix-android.aab`

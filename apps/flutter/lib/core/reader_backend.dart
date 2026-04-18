@@ -102,6 +102,24 @@ abstract class ReaderBackend {
     NotificationSettings settings,
   );
 
+  Future<RefreshSettings> feedRefreshSettings(String feedId);
+
+  Future<RefreshSettings> updateFeedRefreshSettings(
+    String feedId,
+    RefreshSettings settings,
+  );
+
+  Future<RefreshSettings> deleteFeedRefreshSettings(String feedId);
+
+  Future<RefreshSettings> groupRefreshSettings(String groupId);
+
+  Future<RefreshSettings> updateGroupRefreshSettings(
+    String groupId,
+    RefreshSettings settings,
+  );
+
+  Future<RefreshSettings> deleteGroupRefreshSettings(String groupId);
+
   Future<List<NotificationEventModel>> listPendingNotificationEvents({
     int limit = 50,
   });

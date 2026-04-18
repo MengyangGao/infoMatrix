@@ -6,7 +6,11 @@ struct InfoMatrixiPadApp: App {
 
     init() {
         let dbPath = NativeReaderService.defaultDBPath()
-        _state = StateObject(wrappedValue: AppState(service: NativeReaderService(dbPath: dbPath)))
+        let service = NativeReaderService(dbPath: dbPath)
+        let syncCoordinator = CloudKitSyncCoordinator(service: service)
+        _state = StateObject(
+            wrappedValue: AppState(service: service, syncCoordinator: syncCoordinator)
+        )
     }
 
     var body: some Scene {

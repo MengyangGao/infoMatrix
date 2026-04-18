@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../core/models.dart';
+import '../core/reader_presentation.dart';
 import '../core/reader_backend.dart';
 
 class ReaderShellPage extends StatefulWidget {
@@ -572,62 +573,11 @@ class _ReaderShellPageState extends State<ReaderShellPage> {
   }
 
   String get _selectionTitle {
-    if (_selectedFeed != null) {
-      return _selectedFeed!.title;
-    }
-    if (_isGroupSelection(_selectedSelectionID)) {
-      return _groups
-          .firstWhere(
-            (group) => group.id == _groupIDFromSelection(_selectedSelectionID),
-            orElse: () => const FeedGroupModel(id: '', name: '分类'),
-          )
-          .name;
-    }
-    switch (_selectedSelectionID) {
-      case _inboxSelectionID:
-        return '收件箱';
-      case _unreadSelectionID:
-        return '未读';
-      case _starredSelectionID:
-        return '星标';
-      case _laterSelectionID:
-        return '稍后读';
-      case _notesSelectionID:
-        return '随想';
-      case _archiveSelectionID:
-        return '归档';
-      default:
-        return '内容';
-    }
+    return _screenState.headerTitle;
   }
 
   String get _selectionSubtitle {
-    if (_selectedFeed != null) {
-      return '${_items.length} 条条目';
-    }
-    if (_isGroupSelection(_selectedSelectionID)) {
-      final groupID = _groupIDFromSelection(_selectedSelectionID);
-      final feedCount = _feeds
-          .where((feed) => feed.groups.any((group) => group.id == groupID))
-          .length;
-      return '$feedCount 个订阅 · ${_items.length} 条条目';
-    }
-    switch (_selectedSelectionID) {
-      case _inboxSelectionID:
-        return '${_items.length} 条内容';
-      case _unreadSelectionID:
-        return '${_items.length} 条未读';
-      case _starredSelectionID:
-        return '${_items.length} 条星标';
-      case _laterSelectionID:
-        return '${_items.length} 条稍后读';
-      case _notesSelectionID:
-        return '${_items.length} 条随想';
-      case _archiveSelectionID:
-        return '${_items.length} 条归档';
-      default:
-        return '${_items.length} 条内容';
-    }
+    return _screenState.headerSubtitle;
   }
 
   String get _selectionEmptyMessage {
@@ -716,6 +666,170 @@ class _ReaderShellPageState extends State<ReaderShellPage> {
           .map((value) => value.id == hydratedDetail.id ? hydratedDetail : value)
           .toList(growable: false);
     });
+  }
+
+  ReaderScreenState get _screenState {
+    return ReaderScreenState(
+      headerTitle: _selectionTitleForPresentation,
+      headerSubtitle: _selectionSubtitleForPresentation,
+      sidebarSections: <ReaderSidebarSectionState>[
+        ReaderSidebarSectionState(
+          id: 'special',
+          title: '首页',
+          rows: <ReaderSidebarRowState>[
+            ReaderSidebarRowState(
+              id: _inboxSelectionID,
+              title: '全部',
+              iconName: 'tray.full',
+              badgeCount: _counts.all,
+              isSelected: _selectedSelectionID == _inboxSelectionID,
+            ),
+            ReaderSidebarRowState(
+              id: _unreadSelectionID,
+              title: '未读',
+              iconName: 'circle.dashed',
+              badgeCount: _counts.unread,
+              isSelected: _selectedSelectionID == _unreadSelectionID,
+            ),
+            ReaderSidebarRowState(
+              id: _starredSelectionID,
+              title: '星标',
+              iconName: 'star',
+              badgeCount: _counts.starred,
+              isSelected: _selectedSelectionID == _starredSelectionID,
+            ),
+            ReaderSidebarRowState(
+              id: _laterSelectionID,
+              title: '稍后读',
+              iconName: 'clock',
+              badgeCount: _counts.later,
+              isSelected: _selectedSelectionID == _laterSelectionID,
+            ),
+            ReaderSidebarRowState(
+              id: _notesSelectionID,
+              title: '随想',
+              iconName: 'square.and.pencil',
+              badgeCount: _counts.notes,
+              isSelected: _selectedSelectionID == _notesSelectionID,
+            ),
+            ReaderSidebarRowState(
+              id: _archiveSelectionID,
+              title: '归档',
+              iconName: 'archivebox',
+              badgeCount: _counts.archive,
+              isSelected: _selectedSelectionID == _archiveSelectionID,
+            ),
+          ],
+        ),
+        ReaderSidebarSectionState(
+          id: 'groups',
+          title: '分类',
+          rows: _groups
+              .map(
+                (group) => ReaderSidebarRowState(
+                  id: _groupSelectionID(group.id),
+                  title: group.name,
+                  iconName: 'folder.fill',
+                  badgeCount: _feeds
+                      .where(
+                        (feed) => feed.groups.any((value) => value.id == group.id),
+                      )
+                      .length,
+                  isSelected: _selectedSelectionID == _groupSelectionID(group.id),
+                ),
+              )
+              .toList(growable: false),
+        ),
+        ReaderSidebarSectionState(
+          id: 'feeds',
+          title: '订阅',
+          rows: _feeds
+              .map(
+                (feed) => ReaderSidebarRowState(
+                  id: feed.id,
+                  title: feed.title,
+                  subtitle: feed.siteUrl ?? feed.feedUrl,
+                  iconName: 'newspaper.fill',
+                  isSelected: _selectedSelectionID == feed.id,
+                ),
+              )
+              .toList(growable: false),
+        ),
+      ],
+      detailPane: _selectedItem == null
+          ? null
+          : ReaderDetailPaneState(
+              title: _selectedItem!.title,
+              subtitle: _selectedItem!.canonicalUrl,
+              bodyPreview: _selectedItem!.summary ?? _selectedItem!.contentText,
+              metadata: <String>[
+                _selectedItem!.kind,
+                _selectedItem!.sourceKind,
+                if (_selectedItem!.publishedAt != null) _selectedItem!.publishedAt!,
+              ],
+            ),
+      isLoading: _loading,
+      errorMessage: null,
+    );
+  }
+
+  String get _selectionTitleForPresentation {
+    if (_selectedFeed != null) {
+      return _selectedFeed!.title;
+    }
+    if (_isGroupSelection(_selectedSelectionID)) {
+      return _groups
+          .firstWhere(
+            (group) => group.id == _groupIDFromSelection(_selectedSelectionID),
+            orElse: () => const FeedGroupModel(id: '', name: '分类'),
+          )
+          .name;
+    }
+    switch (_selectedSelectionID) {
+      case _inboxSelectionID:
+        return '收件箱';
+      case _unreadSelectionID:
+        return '未读';
+      case _starredSelectionID:
+        return '星标';
+      case _laterSelectionID:
+        return '稍后读';
+      case _notesSelectionID:
+        return '随想';
+      case _archiveSelectionID:
+        return '归档';
+      default:
+        return '内容';
+    }
+  }
+
+  String get _selectionSubtitleForPresentation {
+    if (_selectedFeed != null) {
+      return '${_items.length} 条条目';
+    }
+    if (_isGroupSelection(_selectedSelectionID)) {
+      final groupID = _groupIDFromSelection(_selectedSelectionID);
+      final feedCount = _feeds
+          .where((feed) => feed.groups.any((group) => group.id == groupID))
+          .length;
+      return '$feedCount 个订阅 · ${_items.length} 条条目';
+    }
+    switch (_selectedSelectionID) {
+      case _inboxSelectionID:
+        return '${_items.length} 条内容';
+      case _unreadSelectionID:
+        return '${_items.length} 条未读';
+      case _starredSelectionID:
+        return '${_items.length} 条星标';
+      case _laterSelectionID:
+        return '${_items.length} 条稍后读';
+      case _notesSelectionID:
+        return '${_items.length} 条随想';
+      case _archiveSelectionID:
+        return '${_items.length} 条归档';
+      default:
+        return '${_items.length} 条内容';
+    }
   }
 
   Future<void> _fetchFullTextForSelectedItem() async {
@@ -860,6 +974,72 @@ class _ReaderShellPageState extends State<ReaderShellPage> {
     await _runBusy(() async {
       await widget.backend.updateFeedNotificationSettings(feed.id, result);
       _statusText = '《${feed.title}》通知设置已保存';
+    });
+  }
+
+  Future<void> _openFeedRefreshSettings(FeedModel feed) async {
+    RefreshSettings? settings;
+    await _runBusy(() async {
+      settings = await widget.backend.feedRefreshSettings(feed.id);
+    });
+    if (!mounted || settings == null) {
+      return;
+    }
+
+    final result = await showDialog<Object>(
+      context: context,
+      builder: (context) => _RefreshSettingsDialog(
+        title: '${feed.title} 自动刷新',
+        initialSettings: settings!,
+      ),
+    );
+    if (result is! RefreshSettings) {
+      return;
+    }
+
+    await _runBusy(() async {
+      await widget.backend.updateFeedRefreshSettings(feed.id, result);
+      _statusText = '《${feed.title}》自动刷新设置已保存';
+    });
+  }
+
+  Future<void> _resetFeedRefreshSettings(FeedModel feed) async {
+    await _runBusy(() async {
+      await widget.backend.deleteFeedRefreshSettings(feed.id);
+      _statusText = '《${feed.title}》已恢复默认刷新';
+    });
+  }
+
+  Future<void> _openGroupRefreshSettings(FeedGroupModel group) async {
+    RefreshSettings? settings;
+    await _runBusy(() async {
+      settings = await widget.backend.groupRefreshSettings(group.id);
+    });
+    if (!mounted || settings == null) {
+      return;
+    }
+
+    final result = await showDialog<Object>(
+      context: context,
+      builder: (context) => _RefreshSettingsDialog(
+        title: '${group.name} 自动刷新',
+        initialSettings: settings!,
+      ),
+    );
+    if (result is! RefreshSettings) {
+      return;
+    }
+
+    await _runBusy(() async {
+      await widget.backend.updateGroupRefreshSettings(group.id, result);
+      _statusText = '《${group.name}》自动刷新设置已保存';
+    });
+  }
+
+  Future<void> _resetGroupRefreshSettings(FeedGroupModel group) async {
+    await _runBusy(() async {
+      await widget.backend.deleteGroupRefreshSettings(group.id);
+      _statusText = '《${group.name}》已恢复默认刷新';
     });
   }
 
@@ -1258,6 +1438,8 @@ class _ReaderShellPageState extends State<ReaderShellPage> {
           onEdit: () => _openFeedEditor(feed),
           onDelete: () => _confirmDeleteFeed(feed),
           onNotificationSettings: () => _openFeedNotificationSettings(feed),
+          onRefreshSettings: () => _openFeedRefreshSettings(feed),
+          onResetRefreshSettings: () => _resetFeedRefreshSettings(feed),
         ),
       );
     }).toList(growable: false);
@@ -1312,18 +1494,52 @@ class _ReaderShellPageState extends State<ReaderShellPage> {
             style: Theme.of(context).textTheme.titleSmall,
           ),
           const SizedBox(height: 8),
-          ..._groups.map(
-            (group) => _ScopeTile(
-              icon: Icons.folder_outlined,
-              title: group.name,
-              count: _feeds
-                  .where((feed) =>
-                      feed.groups.any((entry) => entry.id == group.id))
-                  .length,
-              selected: _selectedSelectionID == _groupSelectionID(group.id),
-              onTap: () => _selectGroup(group),
-            ),
-          ),
+          ..._groups.map((group) {
+            final count = _feeds
+                .where((feed) => feed.groups.any((entry) => entry.id == group.id))
+                .length;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                children: <Widget>[
+                  Expanded(
+                    child: _ScopeTile(
+                      icon: Icons.folder_outlined,
+                      title: group.name,
+                      count: count,
+                      selected: _selectedSelectionID == _groupSelectionID(group.id),
+                      onTap: () => _selectGroup(group),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  PopupMenuButton<String>(
+                    tooltip: '分类操作',
+                    onSelected: (value) {
+                      if (value == 'refresh') {
+                        _openGroupRefreshSettings(group);
+                      } else if (value == 'reset_refresh') {
+                        _resetGroupRefreshSettings(group);
+                      }
+                    },
+                    itemBuilder: (context) => const <PopupMenuEntry<String>>[
+                      PopupMenuItem<String>(
+                        value: 'refresh',
+                        child: Text('自动刷新…'),
+                      ),
+                      PopupMenuItem<String>(
+                        value: 'reset_refresh',
+                        child: Text('恢复默认刷新'),
+                      ),
+                    ],
+                    child: Icon(
+                      Icons.more_horiz,
+                      color: Theme.of(context).colorScheme.secondary,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
         ],
       ),
     );
@@ -1651,6 +1867,8 @@ class _FeedCard extends StatelessWidget {
     required this.onEdit,
     required this.onDelete,
     required this.onNotificationSettings,
+    required this.onRefreshSettings,
+    required this.onResetRefreshSettings,
   });
 
   final FeedModel feed;
@@ -1659,6 +1877,8 @@ class _FeedCard extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   final VoidCallback onNotificationSettings;
+  final VoidCallback onRefreshSettings;
+  final VoidCallback onResetRefreshSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -1778,6 +1998,10 @@ class _FeedCard extends StatelessWidget {
                     onDelete();
                   } else if (value == 'notifications') {
                     onNotificationSettings();
+                  } else if (value == 'refresh') {
+                    onRefreshSettings();
+                  } else if (value == 'reset_refresh') {
+                    onResetRefreshSettings();
                   }
                 },
                 itemBuilder: (context) => const <PopupMenuEntry<String>>[
@@ -1788,6 +2012,14 @@ class _FeedCard extends StatelessWidget {
                   PopupMenuItem<String>(
                     value: 'notifications',
                     child: Text('通知设置…'),
+                  ),
+                  PopupMenuItem<String>(
+                    value: 'refresh',
+                    child: Text('自动刷新…'),
+                  ),
+                  PopupMenuItem<String>(
+                    value: 'reset_refresh',
+                    child: Text('恢复默认刷新'),
                   ),
                   PopupMenuDivider(),
                   PopupMenuItem<String>(
@@ -2408,6 +2640,134 @@ class _NotificationSettingsDialogState
       } else {
         Navigator.of(context).pop(settings);
       }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+        });
+      }
+    }
+  }
+}
+
+class _RefreshSettingsDialog extends StatefulWidget {
+  const _RefreshSettingsDialog({
+    required this.title,
+    required this.initialSettings,
+  });
+
+  final String title;
+  final RefreshSettings initialSettings;
+
+  @override
+  State<_RefreshSettingsDialog> createState() => _RefreshSettingsDialogState();
+}
+
+class _RefreshSettingsDialogState extends State<_RefreshSettingsDialog> {
+  late bool _enabled;
+  late final TextEditingController _intervalController;
+  String? _validationError;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _enabled = widget.initialSettings.enabled;
+    _intervalController = TextEditingController(
+      text: widget.initialSettings.intervalMinutes.toString(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _intervalController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: SizedBox(
+        width: 420,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            if (_validationError != null) ...<Widget>[
+              Text(
+                _validationError!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+              const SizedBox(height: 8),
+            ],
+            SwitchListTile.adaptive(
+              contentPadding: EdgeInsets.zero,
+              value: _enabled,
+              onChanged: (value) {
+                setState(() {
+                  _enabled = value;
+                });
+              },
+              title: const Text('启用自动刷新'),
+            ),
+            TextField(
+              controller: _intervalController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: '刷新间隔（分钟）',
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '刷新间隔决定这个分类或订阅被后台轮询的节奏。',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: _saving ? null : _save,
+          child: const Text('保存'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _save() async {
+    final validationError = validatePositiveIntInput(
+      _intervalController.text,
+      fieldLabel: '刷新间隔',
+    );
+    if (validationError != null) {
+      setState(() {
+        _validationError = validationError;
+      });
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+      _validationError = null;
+    });
+
+    try {
+      final settings = RefreshSettings(
+        enabled: _enabled,
+        intervalMinutes: parsePositiveIntInput(
+          _intervalController.text,
+          fallback: 15,
+        ),
+      );
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).pop(settings);
     } finally {
       if (mounted) {
         setState(() {

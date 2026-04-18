@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import 'package:infomatrix_shell/app.dart';
 import 'package:infomatrix_shell/core/models.dart';
+import 'package:infomatrix_shell/core/reader_presentation.dart';
 import 'package:infomatrix_shell/core/reader_backend.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -307,6 +308,42 @@ class _FakeBackend implements ReaderBackend {
   }
 
   @override
+  Future<RefreshSettings> feedRefreshSettings(String feedId) async {
+    return const RefreshSettings(enabled: true, intervalMinutes: 15);
+  }
+
+  @override
+  Future<RefreshSettings> updateFeedRefreshSettings(
+    String feedId,
+    RefreshSettings settings,
+  ) async {
+    return settings;
+  }
+
+  @override
+  Future<RefreshSettings> deleteFeedRefreshSettings(String feedId) async {
+    return const RefreshSettings(enabled: true, intervalMinutes: 15);
+  }
+
+  @override
+  Future<RefreshSettings> groupRefreshSettings(String groupId) async {
+    return const RefreshSettings(enabled: true, intervalMinutes: 15);
+  }
+
+  @override
+  Future<RefreshSettings> updateGroupRefreshSettings(
+    String groupId,
+    RefreshSettings settings,
+  ) async {
+    return settings;
+  }
+
+  @override
+  Future<RefreshSettings> deleteGroupRefreshSettings(String groupId) async {
+    return const RefreshSettings(enabled: true, intervalMinutes: 15);
+  }
+
+  @override
   Future<List<NotificationEventModel>> listPendingNotificationEvents({
     int limit = 50,
   }) async {
@@ -456,5 +493,41 @@ void main() {
     expect(backend.listItemLimits, isNotEmpty);
     expect(backend.listItemLimits.first, 250);
     expect(backend.listItemLimits.last, 350);
+  });
+
+  test('reader presentation contract can represent sidebar and detail state', () {
+    const state = ReaderScreenState(
+      headerTitle: '收件箱',
+      headerSubtitle: '42 条内容',
+      sidebarSections: <ReaderSidebarSectionState>[
+        ReaderSidebarSectionState(
+          id: 'special',
+          title: '首页',
+          rows: <ReaderSidebarRowState>[
+            ReaderSidebarRowState(
+              id: '__all_items__',
+              title: '全部',
+              iconName: 'tray.full',
+              badgeCount: 42,
+              isSelected: true,
+            ),
+          ],
+        ),
+      ],
+      detailPane: ReaderDetailPaneState(
+        title: 'Hello InfoMatrix',
+        subtitle: 'example.com',
+        bodyPreview: 'Preview text',
+        metadata: <String>['article', 'feed'],
+      ),
+      isLoading: false,
+      errorMessage: null,
+      syncStatusLine: 'iCloud 可用 · 待同步 0 条',
+    );
+
+    expect(state.headerTitle, '收件箱');
+    expect(state.sidebarSections.single.rows.single.title, '全部');
+    expect(state.detailPane?.metadata, contains('feed'));
+    expect(state.syncStatusLine, contains('待同步'));
   });
 }

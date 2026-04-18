@@ -102,6 +102,35 @@ Refresh results also include notification accounting:
 
 The server writes a refresh-attempt record and applies feed-level notification policy during the same refresh pipeline used for manual and background refreshes.
 
+## Auto-Refresh Settings Contract (Current Local API)
+
+Endpoints:
+
+- `GET /api/v1/feeds/{feed_id}/refresh-settings`
+  - output: effective refresh settings with inheritance applied
+- `PUT /api/v1/feeds/{feed_id}/refresh-settings`
+  - input: explicit per-feed refresh settings payload
+  - output: stored per-feed refresh settings
+- `DELETE /api/v1/feeds/{feed_id}/refresh-settings`
+  - output: effective settings after the explicit override is removed
+- `GET /api/v1/groups/{group_id}/refresh-settings`
+  - output: effective group refresh settings with global fallback applied
+- `PUT /api/v1/groups/{group_id}/refresh-settings`
+  - input: explicit per-group refresh settings payload
+  - output: stored per-group refresh settings
+- `DELETE /api/v1/groups/{group_id}/refresh-settings`
+  - output: effective settings after the explicit override is removed
+
+Settings shape:
+
+- `enabled: bool`
+- `interval_minutes: u32`
+
+Inheritance:
+
+- feed override > group override > global background-refresh defaults
+- disabled settings remove the feed from the due-feed schedule
+
 ## Notification Contract (Current Local API)
 
 Endpoints:

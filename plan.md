@@ -1,71 +1,70 @@
-# InfoMatrix Feed UX Improvements
+# Phase 4: Distribution, Refresh Rules, and Stability Hardening
 
 ## Objective
-Improve the subscription and reading workflow so a user can subscribe with only a domain name, automatically fetch full text by default, toggle that behavior per subscription, and avoid duplicated article titles in the Apple detail view.
+Deliver the next product slice that matters to users: reliable install paths for macOS/Windows/Linux/Android, a macOS Homebrew installation path, configurable auto-refresh rules with global/folder/feed inheritance, and tighter crash-resistant behavior on the main app flows.
 
 ## User Value
-- Domain-only input like `ruanyifeng.com` can resolve common RSS/Atom locations without forcing the user to guess the exact feed path.
-- Full-text extraction becomes the default reading behavior, which reduces extra taps on article-heavy feeds.
-- Users can opt out per feed from the sidebar context menu when a source is noisy or slow.
-- The Apple reader detail pane becomes cleaner by showing the article title only once.
-- The README screenshot will match the current app UI.
+- Users can install InfoMatrix on macOS, Windows, Linux, and Android without building from source.
+- Mac users can optionally install through Homebrew in addition to release downloads.
+- Auto-refresh becomes controllable at the right scope instead of being a single global toggle.
+- The app becomes safer to use because main mutation and refresh flows surface errors instead of crashing.
 
 ## Constraints
-- Keep the subscription logic deterministic and testable.
-- Preserve local-first storage and existing refresh behavior.
-- Avoid coupling network probing to view code.
-- Keep the schema change backward-compatible for existing databases.
+- Keep SQLite as the source of truth.
+- Preserve existing release artifact generation where possible.
+- Do not introduce AI/LLM work in this phase.
+- Keep Android, Linux, and Windows local-only; Apple sync remains separate.
+- Keep changes deterministic and testable.
+- Do not couple networking directly to view code.
 
 ## Assumptions
-- [ASSUMPTION] The new auto-full-text preference should default to enabled for new and existing subscriptions.
-- [ASSUMPTION] Apple is the primary shell for the right-click toggle, but the setting must be stored in core so other shells can honor it.
-- [ASSUMPTION] The README screenshot can be replaced with the provided image asset or an equivalent capture of the current UI if the attachment is not directly accessible from disk.
+- [ASSUMPTION] Homebrew distribution will use a project-owned tap with cask/formula metadata checked into this repo.
+- [ASSUMPTION] Auto-refresh rules should inherit as `feed override > folder override > global default`.
+- [ASSUMPTION] Existing global background refresh settings remain as the default layer, with new per-group and per-feed overrides added alongside them.
+- [ASSUMPTION] "Memos" continue to use the existing note/memo entry model.
+- [ASSUMPTION] App Store readiness stays mostly documentation/signing prep in this pass; full submission is later.
 
 ## Overlooked Risks
-1. Broader feed-path probing can increase network requests and slow subscription discovery on some sites.
-2. Adding a feed-level preference requires schema migration and contract updates across Rust, Apple, and Flutter, so one missed decoder can break startup.
-3. Auto full-text on selection may increase fetch traffic and could surface parsing edge cases for sites that block article scraping.
+1. A naive refresh-rule implementation can silently diverge between storage, server scheduling, and both shells if the effective-setting logic is duplicated instead of shared.
+2. Homebrew packaging can become stale quickly if the release artifact names or checksums change without a matching tap update path.
+3. Crash hardening can regress user-visible behavior if error propagation changes without tests for the common paths.
 
 ## Affected Files
-- `README.md`
-- `assets/README/macos-main.png`
 - `core/crates/models/src/lib.rs`
 - `core/crates/storage/src/lib.rs`
-- `core/crates/storage/migrations/0001_init.sql`
-- `core/crates/app_core/src/lib.rs`
-- `core/crates/app_server/src/main.rs`
 - `core/crates/ffi_bridge/src/lib.rs`
-- `apps/apple/Shared/Models.swift`
-- `apps/apple/Shared/ReaderService.swift`
-- `apps/apple/Shared/NativeReaderService.swift`
-- `apps/apple/Shared/AppState.swift`
-- `apps/apple/Shared/ReaderShellView.swift`
-- `apps/apple/Tests/InfoMatrixShellTests/AppStateTests.swift`
-- `apps/flutter/lib/core/models.dart`
-- `apps/flutter/lib/core/reader_backend.dart`
-- `apps/flutter/lib/core/ffi_reader_backend.dart`
-- `apps/flutter/lib/ui/reader_shell_page.dart`
-- `apps/flutter/test/widget_test.dart`
+- `core/crates/app_server/src/main.rs`
+- `apps/apple/Shared/*.swift`
+- `apps/apple/Tests/InfoMatrixShellTests/*.swift`
+- `apps/flutter/lib/core/*.dart`
+- `apps/flutter/lib/ui/*.dart`
+- `apps/flutter/test/*.dart`
+- `tooling/scripts/*.sh`
+- `.github/workflows/release.yml`
+- `docs/*.md`
+- `Formula/*` or `Casks/*` if a Homebrew tap layout is added
 
 ## Steps
-1. Replace the README screenshot asset and keep the README reference stable.
-2. Extend feed storage and API contracts with an `auto_full_text` setting defaulting to enabled.
-3. Teach subscription discovery to probe a wider set of common feed path patterns from domain-only input.
-4. Wire Apple and Flutter shells to honor the new preference when loading article details, and expose a sidebar control on Apple to toggle it.
-5. Remove the duplicated article title from the Apple detail header.
-6. Add or update regression tests for discovery inference, auto-full-text behavior, and model decoding.
+1. Add a refresh-rule model in the shared Rust domain layer, persist it in SQLite, and expose read/write APIs for global, group, and feed-level settings.
+2. Teach the background refresh scheduler and both shells to compute and edit the effective refresh behavior using the new inheritance chain.
+3. Add regression tests for refresh-rule persistence, inheritance, and scheduling behavior.
+4. Add a Homebrew tap layout or equivalent metadata so macOS users can install the app via `brew` in addition to downloading release artifacts.
+5. Review the user-facing mutation flows for obvious crash hazards and convert any reachable hard failures into recoverable errors with tests.
+6. Update release and installation docs so the supported install paths and refresh behavior are explicit.
 
 ## Validation
-- `cargo test --workspace --locked`
+- `cargo test --workspace`
 - `swift test --disable-sandbox`
 - `flutter test`
-- Run focused tests for the updated subscription and reader-state paths if full workspace runs expose regressions.
+- `tooling/scripts/release_check.sh`
+- Local install smoke checks for the packaged artifacts where the platform is available
 
 ## Risks
-- Existing databases need the new feed column to be added safely on open.
-- More aggressive discovery probing may need tuning if it hits slow or rate-limited sites.
-- Changing the selected-item hydration path may affect tests that currently expect manual full-text fetch only.
+- A cross-language settings change can require coordinated updates in Rust, Swift, and Dart at the same time.
+- Homebrew metadata may need release-specific URLs or checksums, so the tap may require a follow-up automation once the tap format is chosen.
+- Installing refresh rules at the wrong abstraction level could make the UI confusing unless the effective inheritance is shown clearly.
 
 ## Rollback Notes
-- Revert the schema, API, and UI changes together if any shell stops decoding feeds or loading details correctly.
-- Keep the README image swap independent so it can remain even if a code rollback is needed.
+- If the refresh-rule model is too broad, keep the existing global background refresh settings and revert the new per-feed/per-group overrides.
+- If the Homebrew path is unstable, remove the tap metadata and keep the GitHub Releases download path intact.
+- If crash-hardening changes disrupt core flows, revert the affected UI adapters while keeping the new tests and model types isolated for a narrower follow-up.

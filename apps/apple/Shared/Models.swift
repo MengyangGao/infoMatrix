@@ -328,6 +328,21 @@ public struct NotificationSettings: Codable, Equatable, Sendable {
     }
 }
 
+public struct RefreshSettings: Codable, Equatable, Sendable {
+    public var enabled: Bool
+    public var intervalMinutes: Int
+
+    public init(enabled: Bool = true, intervalMinutes: Int = 15) {
+        self.enabled = enabled
+        self.intervalMinutes = max(1, intervalMinutes)
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case enabled
+        case intervalMinutes = "interval_minutes"
+    }
+}
+
 public struct GlobalNotificationSettings: Codable, Equatable, Sendable {
     public var backgroundRefreshEnabled: Bool
     public var backgroundRefreshIntervalMinutes: Int

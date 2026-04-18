@@ -5,11 +5,13 @@ use models::{
     DigestPolicy, EntryKind, EntrySource, EntrySourceKind, FeedHealthState, FeedType,
     GlobalNotificationSettings, ItemScopeCounts, ItemState, ItemStatePatch, NewEntry, NewFeed,
     NormalizedItem, NotificationDeliveryState, NotificationDigest, NotificationEvent,
-    NotificationMode, NotificationSettings, PushEndpointRegistration, QuietHours,
+    NotificationMode, NotificationSettings, PushEndpointRegistration, QuietHours, RefreshSettings,
 };
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::cell::Cell;
 use thiserror::Error;
 use url::Url;
 use uuid::Uuid;
@@ -98,6 +100,17 @@ pub struct RefreshJobRow {
     /// Last reason.
     pub last_reason: Option<String>,
     /// Update timestamp.
+    pub updated_at: String,
+}
+
+/// Refresh settings row for a specific scope.
+#[derive(Debug, Clone)]
+pub struct RefreshSettingsRow {
+    /// Scope identifier such as a feed id or group id.
+    pub scope_id: String,
+    /// Refresh settings.
+    pub settings: RefreshSettings,
+    /// Last update timestamp.
     pub updated_at: String,
 }
 
@@ -233,6 +246,83 @@ pub struct SyncEventRow {
     pub processed_at: Option<String>,
 }
 
+/// Sync event payload accepted from remote adapters.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SyncEventRecord {
+    /// Event identifier.
+    pub id: String,
+    /// Logical entity type.
+    pub entity_type: String,
+    /// Entity identifier.
+    pub entity_id: String,
+    /// Event kind.
+    pub event_type: String,
+    /// JSON payload blob.
+    pub payload_json: String,
+    /// Event creation timestamp.
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SyncFeedPayload {
+    feed_url: String,
+    site_url: Option<String>,
+    title: Option<String>,
+    feed_type: FeedType,
+    auto_full_text: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SyncFeedGroupPayload {
+    name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SyncFeedMembershipPayload {
+    feed_url: String,
+    group_name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SyncItemStatePayload {
+    item_id: Option<String>,
+    canonical_url: Option<String>,
+    external_item_id: Option<String>,
+    is_read: bool,
+    is_starred: bool,
+    is_saved_for_later: bool,
+    is_archived: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SyncGlobalNotificationSettingsPayload {
+    settings: GlobalNotificationSettings,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SyncFeedNotificationSettingsPayload {
+    feed_url: String,
+    settings: NotificationSettings,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SyncFeedRefreshSettingsPayload {
+    feed_url: String,
+    settings: RefreshSettings,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SyncGroupRefreshSettingsPayload {
+    group_name: String,
+    settings: RefreshSettings,
+}
+
+#[derive(Debug, Clone)]
+struct EntrySyncIdentity {
+    canonical_url: Option<String>,
+    external_item_id: Option<String>,
+}
+
 /// Item summary row for list views.
 #[derive(Debug, Clone)]
 pub struct ItemSummaryRow {
@@ -313,9 +403,23 @@ pub enum StorageError {
     NotFound,
 }
 
+struct SyncEventSuppressionGuard {
+    storage: *const Storage,
+    previous: bool,
+}
+
+impl Drop for SyncEventSuppressionGuard {
+    fn drop(&mut self) {
+        unsafe {
+            (*self.storage).sync_events_suppressed.set(self.previous);
+        }
+    }
+}
+
 /// SQLite-backed storage service.
 pub struct Storage {
     conn: Connection,
+    sync_events_suppressed: Cell<bool>,
 }
 
 /// Global item list filter.
@@ -338,20 +442,21 @@ impl Storage {
     pub fn open(path: &str) -> Result<Self, StorageError> {
         let conn = Connection::open(path)?;
         conn.execute_batch("PRAGMA foreign_keys = ON;")?;
-        Ok(Self { conn })
+        Ok(Self { conn, sync_events_suppressed: Cell::new(false) })
     }
 
     /// Open in-memory database (mostly for tests).
     pub fn open_in_memory() -> Result<Self, StorageError> {
         let conn = Connection::open_in_memory()?;
         conn.execute_batch("PRAGMA foreign_keys = ON;")?;
-        Ok(Self { conn })
+        Ok(Self { conn, sync_events_suppressed: Cell::new(false) })
     }
 
     /// Apply schema migrations.
     pub fn migrate(&self) -> Result<(), StorageError> {
         self.conn.execute_batch(include_str!("../migrations/0001_init.sql"))?;
         self.conn.execute_batch(include_str!("../migrations/0002_notifications.sql"))?;
+        self.conn.execute_batch(include_str!("../migrations/0004_refresh_rules.sql"))?;
         self.ensure_notification_settings_digest_max_items_column()?;
         self.ensure_feed_auto_full_text_column()?;
         self.conn.execute(
@@ -450,6 +555,151 @@ impl Storage {
         Ok(())
     }
 
+    fn resolve_feed_id_by_url(&self, feed_url: &str) -> Result<Option<String>, StorageError> {
+        self.conn
+            .query_row(
+                "SELECT id FROM feeds WHERE feed_url = ?1 LIMIT 1",
+                params![feed_url],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(StorageError::Sqlite)
+    }
+
+    fn resolve_feed_url_by_id(&self, feed_id: &str) -> Result<Option<String>, StorageError> {
+        self.conn
+            .query_row(
+                "SELECT feed_url FROM feeds WHERE id = ?1 LIMIT 1",
+                params![feed_id],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(StorageError::Sqlite)
+    }
+
+    fn resolve_group_id_by_name(&self, group_name: &str) -> Result<Option<String>, StorageError> {
+        self.conn
+            .query_row(
+                "SELECT id FROM feed_groups WHERE lower(name) = lower(?1) LIMIT 1",
+                params![group_name],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(StorageError::Sqlite)
+    }
+
+    fn resolve_entry_id_by_identity(
+        &self,
+        item_id: Option<&str>,
+        canonical_url: Option<&str>,
+        external_item_id: Option<&str>,
+    ) -> Result<Option<String>, StorageError> {
+        if let Some(item_id) = item_id {
+            let existing = self
+                .conn
+                .query_row(
+                    "SELECT id FROM entries WHERE id = ?1 LIMIT 1",
+                    params![item_id],
+                    |row| row.get(0),
+                )
+                .optional()?;
+            if existing.is_some() {
+                return Ok(existing);
+            }
+        }
+
+        if let Some(canonical_url) = canonical_url {
+            let existing = self
+                .conn
+                .query_row(
+                    "SELECT id FROM entries WHERE canonical_url = ?1 LIMIT 1",
+                    params![canonical_url],
+                    |row| row.get(0),
+                )
+                .optional()?;
+            if existing.is_some() {
+                return Ok(existing);
+            }
+        }
+
+        if let Some(external_item_id) = external_item_id {
+            let existing = self
+                .conn
+                .query_row(
+                    "SELECT id FROM entries WHERE external_item_id = ?1 LIMIT 1",
+                    params![external_item_id],
+                    |row| row.get(0),
+                )
+                .optional()?;
+            if existing.is_some() {
+                return Ok(existing);
+            }
+        }
+
+        Ok(None)
+    }
+
+    fn get_entry_sync_identity(
+        &self,
+        item_id: &str,
+    ) -> Result<Option<EntrySyncIdentity>, StorageError> {
+        self.conn
+            .query_row(
+                "SELECT e.canonical_url, e.external_item_id
+                 FROM entries e
+                 WHERE e.id = ?1
+                 LIMIT 1",
+                params![item_id],
+                |row| {
+                    Ok(EntrySyncIdentity {
+                        canonical_url: row.get(0)?,
+                        external_item_id: row.get(1)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(StorageError::Sqlite)
+    }
+
+    fn is_syncable_user_entry(&self, entry_id: &str) -> Result<bool, StorageError> {
+        let result = self
+            .conn
+            .query_row(
+                "SELECT e.kind, src.source_kind
+                 FROM entries e
+                 LEFT JOIN entry_sources src ON src.entry_id = e.id
+                 WHERE e.id = ?1
+                 LIMIT 1",
+                params![entry_id],
+                |row| {
+                    let kind_raw: String = row.get(0)?;
+                    let source_kind_raw: String = row.get(1)?;
+                    Ok(kind_raw != "article"
+                        || entry_source_kind_from_str(&source_kind_raw) != EntrySourceKind::Feed)
+                },
+            )
+            .optional()?;
+        Ok(result.unwrap_or(false))
+    }
+
+    fn append_sync_event_if_enabled(
+        &self,
+        entity_type: &str,
+        entity_id: &str,
+        event_type: &str,
+        payload_json: &str,
+    ) -> Result<(), StorageError> {
+        if self.sync_events_suppressed.get() {
+            return Ok(());
+        }
+        self.append_sync_event(entity_type, entity_id, event_type, payload_json)
+    }
+
+    fn suppress_sync_events(&self) -> SyncEventSuppressionGuard {
+        let previous = self.sync_events_suppressed.replace(true);
+        SyncEventSuppressionGuard { storage: self as *const Storage, previous }
+    }
+
     fn ensure_notification_settings_digest_max_items_column(&self) -> Result<(), StorageError> {
         let has_column = self.conn.query_row(
             "SELECT EXISTS(
@@ -508,6 +758,14 @@ impl Storage {
         let now = Utc::now().to_rfc3339();
 
         if let Some(feed_id) = existing {
+            let current_auto_full_text = self
+                .conn
+                .query_row(
+                    "SELECT auto_full_text FROM feeds WHERE id = ?1 LIMIT 1",
+                    params![&feed_id],
+                    |row| row.get::<_, i64>(0),
+                )
+                .unwrap_or(1);
             self.conn.execute(
                 "UPDATE feeds
                  SET site_url = COALESCE(?1, site_url),
@@ -523,13 +781,32 @@ impl Storage {
                     feed_id,
                 ],
             )?;
+            let payload_json = serde_json::to_string(&SyncFeedPayload {
+                feed_url: new_feed.feed_url.as_str().to_owned(),
+                site_url: new_feed.site_url.as_ref().map(|v| v.as_str().to_owned()),
+                title: new_feed.title.clone(),
+                feed_type: new_feed.feed_type,
+                auto_full_text: Some(current_auto_full_text != 0),
+            })
+            .map_err(|err| StorageError::Serialization(err.to_string()))?;
+            self.append_sync_event_if_enabled(
+                "feed",
+                new_feed.feed_url.as_str(),
+                "updated",
+                &payload_json,
+            )?;
             return Ok(feed_id);
         }
 
         let feed_id = Uuid::now_v7().to_string();
-        let next_scheduled_fetch_at =
-            compute_next_scheduled_fetch(Utc::now(), true, FeedHealthState::Healthy, 0)
-                .to_rfc3339();
+        let next_scheduled_fetch_at = compute_next_scheduled_fetch(
+            Utc::now(),
+            true,
+            FeedHealthState::Healthy,
+            0,
+            self.get_global_notification_settings()?.background_refresh_interval_minutes.max(1),
+        )
+        .to_rfc3339();
         self.conn.execute(
             "INSERT INTO feeds (
                 id, feed_url, site_url, title, feed_type, auto_full_text,
@@ -545,6 +822,20 @@ impl Storage {
                 now,
                 now,
             ],
+        )?;
+        let payload_json = serde_json::to_string(&SyncFeedPayload {
+            feed_url: new_feed.feed_url.as_str().to_owned(),
+            site_url: new_feed.site_url.as_ref().map(|v| v.as_str().to_owned()),
+            title: new_feed.title.clone(),
+            feed_type: new_feed.feed_type,
+            auto_full_text: Some(true),
+        })
+        .map_err(|err| StorageError::Serialization(err.to_string()))?;
+        self.append_sync_event_if_enabled(
+            "feed",
+            new_feed.feed_url.as_str(),
+            "created",
+            &payload_json,
         )?;
 
         Ok(feed_id)
@@ -646,6 +937,14 @@ impl Storage {
 
     /// Delete one feed by id.
     pub fn delete_feed(&self, feed_id: &str) -> Result<(), StorageError> {
+        let feed_url: Option<String> = self
+            .conn
+            .query_row(
+                "SELECT feed_url FROM feeds WHERE id = ?1 LIMIT 1",
+                params![feed_id],
+                |row| row.get(0),
+            )
+            .optional()?;
         self.conn.execute(
             "DELETE FROM entries
              WHERE id IN (
@@ -660,23 +959,42 @@ impl Storage {
         if affected == 0 {
             return Err(StorageError::NotFound);
         }
+        if let Some(feed_url) = feed_url {
+            let payload_json = json!({ "feed_url": feed_url }).to_string();
+            self.append_sync_event_if_enabled("feed", &feed_url, "deleted", &payload_json)?;
+        }
+        Ok(())
+    }
+
+    /// Delete a unified entry and its dependent rows.
+    pub fn delete_entry(&self, entry_id: &str) -> Result<(), StorageError> {
+        let affected = self.conn.execute("DELETE FROM entries WHERE id = ?1", params![entry_id])?;
+        if affected == 0 {
+            return Err(StorageError::NotFound);
+        }
         Ok(())
     }
 
     /// List feeds whose next scheduled refresh is due.
     pub fn list_due_feeds(&self, limit: usize) -> Result<Vec<FeedRow>, StorageError> {
+        let globals = self.get_global_notification_settings()?;
+        let global_enabled = bool_to_i64(globals.background_refresh_enabled);
         let mut statement = self.conn.prepare(
-            "SELECT id, feed_url, site_url, title, feed_type, auto_full_text, etag, last_modified,
-                    last_fetch_at, last_success_at, last_http_status, failure_count,
-                    next_scheduled_fetch_at, avg_response_time_ms, health_state
-             FROM feeds
-             WHERE next_scheduled_fetch_at IS NULL
-                OR next_scheduled_fetch_at <= ?1
-             ORDER BY COALESCE(next_scheduled_fetch_at, created_at) ASC, created_at ASC
-             LIMIT ?2",
+            "SELECT f.id, f.feed_url, f.site_url, f.title, f.feed_type, f.auto_full_text, f.etag, f.last_modified,
+                    f.last_fetch_at, f.last_success_at, f.last_http_status, f.failure_count,
+                    f.next_scheduled_fetch_at, f.avg_response_time_ms, f.health_state
+             FROM feeds f
+             LEFT JOIN feed_refresh_settings fr ON fr.feed_id = f.id
+             LEFT JOIN group_memberships gm ON gm.feed_id = f.id
+             LEFT JOIN group_refresh_settings gr ON gr.group_id = gm.group_id
+             WHERE COALESCE(fr.enabled, gr.enabled, ?1) = 1
+               AND (f.next_scheduled_fetch_at IS NULL
+                OR f.next_scheduled_fetch_at <= ?2)
+             ORDER BY COALESCE(f.next_scheduled_fetch_at, f.created_at) ASC, f.created_at ASC
+             LIMIT ?3",
         )?;
         let now = Utc::now().to_rfc3339();
-        let rows = statement.query_map(params![now, limit as i64], |row| {
+        let rows = statement.query_map(params![global_enabled, now, limit as i64], |row| {
             let feed_url: String = row.get(1)?;
             let site_url: Option<String> = row.get(2)?;
             let feed_type_raw: String = row.get(4)?;
@@ -726,6 +1044,18 @@ impl Storage {
         if affected == 0 {
             return Err(StorageError::NotFound);
         }
+        if let Some(feed_url) = self.resolve_feed_url_by_id(feed_id)? {
+            let feed = self.get_feed(feed_id)?;
+            let payload_json = serde_json::to_string(&SyncFeedPayload {
+                feed_url: feed.feed_url.as_str().to_owned(),
+                site_url: feed.site_url.as_ref().map(|value| value.as_str().to_owned()),
+                title: feed.title.clone(),
+                feed_type: feed.feed_type,
+                auto_full_text: Some(feed.auto_full_text),
+            })
+            .map_err(|err| StorageError::Serialization(err.to_string()))?;
+            self.append_sync_event_if_enabled("feed", &feed_url, "updated", &payload_json)?;
+        }
         Ok(())
     }
 
@@ -741,6 +1071,18 @@ impl Storage {
         )?;
         if affected == 0 {
             return Err(StorageError::NotFound);
+        }
+        if let Some(feed_url) = self.resolve_feed_url_by_id(feed_id)? {
+            let feed = self.get_feed(feed_id)?;
+            let payload_json = serde_json::to_string(&SyncFeedPayload {
+                feed_url: feed.feed_url.as_str().to_owned(),
+                site_url: feed.site_url.as_ref().map(|value| value.as_str().to_owned()),
+                title: feed.title.clone(),
+                feed_type: feed.feed_type,
+                auto_full_text: Some(enabled),
+            })
+            .map_err(|err| StorageError::Serialization(err.to_string()))?;
+            self.append_sync_event_if_enabled("feed", &feed_url, "updated", &payload_json)?;
         }
         Ok(())
     }
@@ -784,7 +1126,23 @@ impl Storage {
             "INSERT INTO feed_groups (id, name, created_at, updated_at) VALUES (?1, ?2, ?3, ?4)",
             params![id, trimmed, now, now],
         )?;
+        let payload_json = json!({ "name": trimmed }).to_string();
+        self.append_sync_event_if_enabled("feed_group", &id, "created", &payload_json)?;
         Ok(FeedGroupRow { id, name: trimmed.to_owned() })
+    }
+
+    /// Delete a feed group.
+    pub fn delete_group(&self, group_id: &str) -> Result<(), StorageError> {
+        let affected_feeds = self.list_feed_ids_for_group(group_id)?;
+        let affected =
+            self.conn.execute("DELETE FROM feed_groups WHERE id = ?1", params![group_id])?;
+        if affected == 0 {
+            return Err(StorageError::NotFound);
+        }
+        for feed_id in affected_feeds {
+            let _ = self.recalculate_feed_refresh_schedule(&feed_id);
+        }
+        Ok(())
     }
 
     /// Assign feed into a single group (or clear group assignment).
@@ -803,6 +1161,39 @@ impl Storage {
             )?;
         }
         tx.commit()?;
+        let feed_url = self
+            .conn
+            .query_row(
+                "SELECT feed_url FROM feeds WHERE id = ?1 LIMIT 1",
+                params![feed_id],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?;
+        let group_name = if let Some(group_id) = group_id {
+            self.conn
+                .query_row(
+                    "SELECT name FROM feed_groups WHERE id = ?1 LIMIT 1",
+                    params![group_id],
+                    |row| row.get::<_, String>(0),
+                )
+                .optional()?
+        } else {
+            None
+        };
+        if let Some(feed_url) = feed_url {
+            let payload_json = json!({
+                "feed_url": feed_url,
+                "group_name": group_name,
+            })
+            .to_string();
+            self.append_sync_event_if_enabled(
+                "feed_membership",
+                &feed_url,
+                "updated",
+                &payload_json,
+            )?;
+        }
+        let _ = self.recalculate_feed_refresh_schedule(feed_id);
         Ok(())
     }
 
@@ -823,6 +1214,250 @@ impl Storage {
             groups.push(row?);
         }
         Ok(groups)
+    }
+
+    /// Store per-feed auto-refresh settings.
+    pub fn upsert_feed_refresh_settings(
+        &mut self,
+        feed_id: &str,
+        settings: &RefreshSettings,
+    ) -> Result<RefreshSettingsRow, StorageError> {
+        let now = Utc::now().to_rfc3339();
+        self.conn.execute(
+            "INSERT INTO feed_refresh_settings (
+                feed_id, enabled, interval_minutes, updated_at
+             ) VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(feed_id) DO UPDATE SET
+                enabled = excluded.enabled,
+                interval_minutes = excluded.interval_minutes,
+                updated_at = excluded.updated_at",
+            params![
+                feed_id,
+                bool_to_i64(settings.enabled),
+                settings.interval_minutes.max(1) as i64,
+                now,
+            ],
+        )?;
+        let row = self.get_feed_refresh_settings(feed_id)?.ok_or(StorageError::NotFound)?;
+        if let Some(feed_url) = self.resolve_feed_url_by_id(feed_id)? {
+            let payload_json = json!({
+                "feed_url": feed_url,
+                "settings": settings,
+            })
+            .to_string();
+            self.append_sync_event_if_enabled(
+                "feed_refresh_settings",
+                &feed_url,
+                "updated",
+                &payload_json,
+            )?;
+        }
+        let _ = self.recalculate_feed_refresh_schedule(feed_id);
+        Ok(row)
+    }
+
+    /// Delete explicit per-feed auto-refresh settings so the feed falls back to inheritance.
+    pub fn delete_feed_refresh_settings(&mut self, feed_id: &str) -> Result<(), StorageError> {
+        let affected = self
+            .conn
+            .execute("DELETE FROM feed_refresh_settings WHERE feed_id = ?1", params![feed_id])?;
+        if affected == 0 {
+            return Err(StorageError::NotFound);
+        }
+        if let Some(feed_url) = self.resolve_feed_url_by_id(feed_id)? {
+            let payload_json = json!({ "feed_url": feed_url }).to_string();
+            self.append_sync_event_if_enabled(
+                "feed_refresh_settings",
+                &feed_url,
+                "deleted",
+                &payload_json,
+            )?;
+        }
+        let _ = self.recalculate_feed_refresh_schedule(feed_id);
+        Ok(())
+    }
+
+    /// Load per-feed auto-refresh settings.
+    pub fn get_feed_refresh_settings(
+        &self,
+        feed_id: &str,
+    ) -> Result<Option<RefreshSettingsRow>, StorageError> {
+        self.conn
+            .query_row(
+                "SELECT feed_id, enabled, interval_minutes, updated_at
+                 FROM feed_refresh_settings
+                 WHERE feed_id = ?1",
+                params![feed_id],
+                |row| {
+                    Ok(RefreshSettingsRow {
+                        scope_id: row.get(0)?,
+                        settings: RefreshSettings {
+                            enabled: int_to_bool(row.get::<_, i64>(1)?),
+                            interval_minutes: row.get::<_, i64>(2)?.max(1) as u32,
+                        },
+                        updated_at: row.get(3)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(StorageError::Sqlite)
+    }
+
+    /// Store per-group auto-refresh settings.
+    pub fn upsert_group_refresh_settings(
+        &mut self,
+        group_id: &str,
+        settings: &RefreshSettings,
+    ) -> Result<RefreshSettingsRow, StorageError> {
+        let now = Utc::now().to_rfc3339();
+        self.conn.execute(
+            "INSERT INTO group_refresh_settings (
+                group_id, enabled, interval_minutes, updated_at
+             ) VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(group_id) DO UPDATE SET
+                enabled = excluded.enabled,
+                interval_minutes = excluded.interval_minutes,
+                updated_at = excluded.updated_at",
+            params![
+                group_id,
+                bool_to_i64(settings.enabled),
+                settings.interval_minutes.max(1) as i64,
+                now,
+            ],
+        )?;
+        let row = self.get_group_refresh_settings(group_id)?.ok_or(StorageError::NotFound)?;
+        for feed_id in self.list_feed_ids_for_group(group_id)? {
+            let _ = self.recalculate_feed_refresh_schedule(&feed_id);
+        }
+        Ok(row)
+    }
+
+    /// Delete explicit per-group auto-refresh settings so the group falls back to inheritance.
+    pub fn delete_group_refresh_settings(&mut self, group_id: &str) -> Result<(), StorageError> {
+        let affected_feeds = self.list_feed_ids_for_group(group_id)?;
+        let group_name: Option<String> = self
+            .conn
+            .query_row(
+                "SELECT name FROM feed_groups WHERE id = ?1 LIMIT 1",
+                params![group_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        let affected = self
+            .conn
+            .execute("DELETE FROM group_refresh_settings WHERE group_id = ?1", params![group_id])?;
+        if affected == 0 {
+            return Err(StorageError::NotFound);
+        }
+        if let Some(group_name) = group_name {
+            let payload_json = json!({ "group_name": group_name }).to_string();
+            self.append_sync_event_if_enabled(
+                "group_refresh_settings",
+                &group_name,
+                "deleted",
+                &payload_json,
+            )?;
+        }
+        for feed_id in affected_feeds {
+            let _ = self.recalculate_feed_refresh_schedule(&feed_id);
+        }
+        Ok(())
+    }
+
+    /// Load per-group auto-refresh settings.
+    pub fn get_group_refresh_settings(
+        &self,
+        group_id: &str,
+    ) -> Result<Option<RefreshSettingsRow>, StorageError> {
+        self.conn
+            .query_row(
+                "SELECT group_id, enabled, interval_minutes, updated_at
+                 FROM group_refresh_settings
+                 WHERE group_id = ?1",
+                params![group_id],
+                |row| {
+                    Ok(RefreshSettingsRow {
+                        scope_id: row.get(0)?,
+                        settings: RefreshSettings {
+                            enabled: int_to_bool(row.get::<_, i64>(1)?),
+                            interval_minutes: row.get::<_, i64>(2)?.max(1) as u32,
+                        },
+                        updated_at: row.get(3)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(StorageError::Sqlite)
+    }
+
+    /// Resolve the effective auto-refresh settings for a feed.
+    pub fn resolve_effective_refresh_settings(
+        &self,
+        feed_id: &str,
+    ) -> Result<RefreshSettings, StorageError> {
+        if let Some(feed_settings) = self.get_feed_refresh_settings(feed_id)? {
+            return Ok(feed_settings.settings);
+        }
+        if let Some(group_id) = self
+            .conn
+            .query_row(
+                "SELECT group_id FROM group_memberships WHERE feed_id = ?1 ORDER BY created_at ASC LIMIT 1",
+                params![feed_id],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?
+        {
+            if let Some(group_settings) = self.get_group_refresh_settings(&group_id)? {
+                return Ok(group_settings.settings);
+            }
+        }
+        let globals = self.get_global_notification_settings()?;
+        Ok(RefreshSettings {
+            enabled: globals.background_refresh_enabled,
+            interval_minutes: globals.background_refresh_interval_minutes.max(1),
+        })
+    }
+
+    fn list_feed_ids_for_group(&self, group_id: &str) -> Result<Vec<String>, StorageError> {
+        let mut statement = self.conn.prepare(
+            "SELECT feed_id
+             FROM group_memberships
+             WHERE group_id = ?1
+             ORDER BY created_at ASC",
+        )?;
+        let rows = statement.query_map(params![group_id], |row| row.get(0))?;
+        let mut feed_ids = Vec::new();
+        for row in rows {
+            feed_ids.push(row?);
+        }
+        Ok(feed_ids)
+    }
+
+    fn recalculate_feed_refresh_schedule(&self, feed_id: &str) -> Result<(), StorageError> {
+        let feed = self.get_feed(feed_id)?;
+        let settings = self.resolve_effective_refresh_settings(feed_id)?;
+        let next_scheduled_fetch_at = if settings.enabled {
+            Some(
+                compute_next_scheduled_fetch(
+                    Utc::now(),
+                    feed.last_fetch_at.is_none(),
+                    feed.health_state,
+                    feed.failure_count as u32,
+                    settings.interval_minutes.max(1),
+                )
+                .to_rfc3339(),
+            )
+        } else {
+            None
+        };
+        self.set_feed_next_scheduled_fetch_at(feed_id, next_scheduled_fetch_at.as_deref())
+    }
+
+    fn recalculate_all_feed_refresh_schedules(&self) -> Result<(), StorageError> {
+        for feed in self.list_feeds()? {
+            let _ = self.recalculate_feed_refresh_schedule(&feed.id);
+        }
+        Ok(())
     }
 
     /// Set one primary icon URL for a feed.
@@ -931,7 +1566,7 @@ impl Storage {
 
     /// Override the next scheduled fetch timestamp for a feed.
     pub fn set_feed_next_scheduled_fetch_at(
-        &mut self,
+        &self,
         feed_id: &str,
         next_scheduled_fetch_at: Option<&str>,
     ) -> Result<(), StorageError> {
@@ -1006,6 +1641,19 @@ impl Storage {
                 now,
             ],
         )?;
+        if let Some(feed_url) = self.resolve_feed_url_by_id(feed_id)? {
+            let payload_json = json!({
+                "feed_url": feed_url,
+                "settings": settings,
+            })
+            .to_string();
+            self.append_sync_event_if_enabled(
+                "notification_settings",
+                &feed_url,
+                "updated",
+                &payload_json,
+            )?;
+        }
         self.get_notification_settings(feed_id)?.ok_or(StorageError::NotFound)
     }
 
@@ -1052,7 +1700,7 @@ impl Storage {
                             keyword_exclude: serde_json::from_str(&keyword_exclude_json)
                                 .unwrap_or_default(),
                         },
-                        updated_at: row.get(11)?,
+                        updated_at: row.get(12)?,
                     })
                 },
             )
@@ -1065,7 +1713,16 @@ impl Storage {
         &self,
         settings: &GlobalNotificationSettings,
     ) -> Result<(), StorageError> {
-        self.set_app_setting_json("notification_globals", settings)
+        self.set_app_setting_json("notification_globals", settings)?;
+        let payload_json = json!({ "settings": settings }).to_string();
+        self.append_sync_event_if_enabled(
+            "notification_globals",
+            "notification_globals",
+            "updated",
+            &payload_json,
+        )?;
+        let _ = self.recalculate_all_feed_refresh_schedules();
+        Ok(())
     }
 
     /// Load global notification defaults from app settings.
@@ -1496,10 +2153,16 @@ impl Storage {
     /// Persist unified entries and create default state rows if needed.
     pub fn upsert_entries(&mut self, entries: &[NewEntry]) -> Result<(), StorageError> {
         let tx = self.conn.transaction()?;
+        let mut sync_events = Vec::new();
 
         for entry in entries {
             let now = Utc::now().to_rfc3339();
             let entry_id = entry.id.clone().unwrap_or_else(|| Uuid::now_v7().to_string());
+            let existed = tx.query_row(
+                "SELECT EXISTS(SELECT 1 FROM entries WHERE id = ?1)",
+                params![&entry_id],
+                |row| row.get::<_, i64>(0),
+            )? != 0;
 
             tx.execute(
                 "INSERT INTO entries (
@@ -1576,9 +2239,32 @@ impl Storage {
                     now,
                 ],
             )?;
+
+            if entry.kind != EntryKind::Article || entry.source.source_kind != EntrySourceKind::Feed
+            {
+                let payload_json = serde_json::to_string(&NewEntry {
+                    id: Some(entry_id.clone()),
+                    ..entry.clone()
+                })
+                .map_err(|err| StorageError::Serialization(err.to_string()))?;
+                sync_events.push((
+                    "entry".to_owned(),
+                    entry_id,
+                    if existed { "updated" } else { "created" }.to_owned(),
+                    payload_json,
+                ));
+            }
         }
 
         tx.commit()?;
+        for (entity_type, entity_id, event_type, payload_json) in sync_events {
+            self.append_sync_event_if_enabled(
+                &entity_type,
+                &entity_id,
+                &event_type,
+                &payload_json,
+            )?;
+        }
         Ok(())
     }
 
@@ -1796,6 +2482,15 @@ impl Storage {
             params![content_text, item_id],
         )?;
         tx.commit()?;
+        if self.is_syncable_user_entry(item_id)? {
+            let payload_json = json!({
+                "entry_id": item_id,
+                "content_html": content_html,
+                "content_text": content_text,
+            })
+            .to_string();
+            self.append_sync_event_if_enabled("entry_content", item_id, "updated", &payload_json)?;
+        }
         Ok(())
     }
 
@@ -1813,6 +2508,7 @@ impl Storage {
         let now_rfc3339 = now.to_rfc3339();
         let success = (200..400).contains(&(http_status as i32)) && error_message.is_none();
         let current_feed = self.get_feed(feed_id)?;
+        let refresh_settings = self.resolve_effective_refresh_settings(feed_id)?;
         let failure_count = if success { 0 } else { current_feed.failure_count.saturating_add(1) };
         let health_state = if success {
             FeedHealthState::Healthy
@@ -1821,13 +2517,20 @@ impl Storage {
         } else {
             FeedHealthState::Stale
         };
-        let next_scheduled_fetch_at = compute_next_scheduled_fetch(
-            now,
-            current_feed.last_fetch_at.is_none(),
-            health_state,
-            failure_count as u32,
-        )
-        .to_rfc3339();
+        let next_scheduled_fetch_at = if refresh_settings.enabled {
+            Some(
+                compute_next_scheduled_fetch(
+                    now,
+                    current_feed.last_fetch_at.is_none(),
+                    health_state,
+                    failure_count as u32,
+                    refresh_settings.interval_minutes.max(1),
+                )
+                .to_rfc3339(),
+            )
+        } else {
+            None
+        };
 
         let tx = self.conn.transaction()?;
 
@@ -1942,39 +2645,228 @@ impl Storage {
         )?;
 
         if state_changed {
+            let sync_identity = self.get_entry_sync_identity(item_id)?;
             let payload_json = json!({
                 "item_id": item_id,
-                "requested_patch": {
-                    "is_read": patch.is_read,
-                    "is_starred": patch.is_starred,
-                    "is_saved_for_later": patch.is_saved_for_later,
-                    "is_archived": patch.is_archived,
-                },
-                "previous_state": {
-                    "is_read": previous.is_read,
-                    "is_starred": previous.is_starred,
-                    "is_saved_for_later": previous.is_saved_for_later,
-                    "is_archived": previous.is_archived,
-                    "read_at": previous.read_at.map(|v| v.to_rfc3339()),
-                    "starred_at": previous.starred_at.map(|v| v.to_rfc3339()),
-                    "saved_for_later_at": previous.saved_for_later_at.map(|v| v.to_rfc3339()),
-                },
-                "current_state": {
-                    "is_read": current.is_read,
-                    "is_starred": current.is_starred,
-                    "is_saved_for_later": current.is_saved_for_later,
-                    "is_archived": current.is_archived,
-                    "read_at": current.read_at.map(|v| v.to_rfc3339()),
-                    "starred_at": current.starred_at.map(|v| v.to_rfc3339()),
-                    "saved_for_later_at": current.saved_for_later_at.map(|v| v.to_rfc3339()),
-                },
+                "canonical_url": sync_identity.as_ref().and_then(|value| value.canonical_url.clone()),
+                "external_item_id": sync_identity.as_ref().and_then(|value| value.external_item_id.clone()),
+                "is_read": current.is_read,
+                "is_starred": current.is_starred,
+                "is_saved_for_later": current.is_saved_for_later,
+                "is_archived": current.is_archived,
                 "updated_at": updated_at,
             })
             .to_string();
-            self.append_sync_event("item_state", item_id, "updated", &payload_json)?;
+            self.append_sync_event_if_enabled("item_state", item_id, "updated", &payload_json)?;
         }
 
         self.get_item_state(item_id)
+    }
+
+    /// Apply a batch of remote sync events to the local database.
+    pub fn apply_sync_events(&mut self, events: &[SyncEventRecord]) -> Result<usize, StorageError> {
+        if events.is_empty() {
+            return Ok(0);
+        }
+
+        let _guard = self.suppress_sync_events();
+        let mut applied = 0usize;
+
+        for event in events {
+            match event.entity_type.as_str() {
+                "feed" => {
+                    let payload: SyncFeedPayload = serde_json::from_str(&event.payload_json)
+                        .map_err(|err| StorageError::Serialization(err.to_string()))?;
+                    if event.event_type == "deleted" {
+                        if let Some(feed_id) = self.resolve_feed_id_by_url(&payload.feed_url)? {
+                            self.delete_feed(&feed_id)?;
+                            applied += 1;
+                        }
+                        continue;
+                    }
+
+                    let feed_id = self.upsert_feed(&NewFeed {
+                        feed_url: Url::parse(&payload.feed_url)
+                            .map_err(|err| StorageError::Serialization(err.to_string()))?,
+                        site_url: payload
+                            .site_url
+                            .as_deref()
+                            .and_then(|value| Url::parse(value).ok()),
+                        title: payload.title.clone(),
+                        feed_type: payload.feed_type,
+                    })?;
+                    if let Some(auto_full_text) = payload.auto_full_text {
+                        self.update_feed_auto_full_text(&feed_id, auto_full_text)?;
+                    }
+                    applied += 1;
+                }
+                "feed_group" => {
+                    let payload: SyncFeedGroupPayload =
+                        serde_json::from_str(&event.payload_json)
+                            .map_err(|err| StorageError::Serialization(err.to_string()))?;
+                    if event.event_type == "deleted" {
+                        if let Some(group_id) = self.resolve_group_id_by_name(&payload.name)? {
+                            self.delete_group(&group_id)?;
+                            applied += 1;
+                        }
+                        continue;
+                    }
+                    let _ = self.create_group(&payload.name)?;
+                    applied += 1;
+                }
+                "feed_membership" => {
+                    let payload: SyncFeedMembershipPayload =
+                        serde_json::from_str(&event.payload_json)
+                            .map_err(|err| StorageError::Serialization(err.to_string()))?;
+                    let feed_id =
+                        if let Some(feed_id) = self.resolve_feed_id_by_url(&payload.feed_url)? {
+                            feed_id
+                        } else {
+                            self.upsert_feed(&NewFeed {
+                                feed_url: Url::parse(&payload.feed_url)
+                                    .map_err(|err| StorageError::Serialization(err.to_string()))?,
+                                site_url: None,
+                                title: None,
+                                feed_type: FeedType::Unknown,
+                            })?
+                        };
+                    let group_id = if let Some(group_name) = payload.group_name.as_deref() {
+                        Some(self.create_group(group_name)?.id)
+                    } else {
+                        None
+                    };
+                    self.set_feed_group(&feed_id, group_id.as_deref())?;
+                    applied += 1;
+                }
+                "entry" => {
+                    let entry: NewEntry = serde_json::from_str(&event.payload_json)
+                        .map_err(|err| StorageError::Serialization(err.to_string()))?;
+                    if event.event_type == "deleted" {
+                        if let Some(entry_id) =
+                            entry.id.as_deref().or(Some(event.entity_id.as_str()))
+                        {
+                            self.delete_entry(entry_id)?;
+                            applied += 1;
+                        }
+                        continue;
+                    }
+                    self.upsert_entries(&[entry])?;
+                    applied += 1;
+                }
+                "entry_content" => {
+                    let payload: serde_json::Value = serde_json::from_str(&event.payload_json)
+                        .map_err(|err| StorageError::Serialization(err.to_string()))?;
+                    let entry_id = payload
+                        .get("entry_id")
+                        .and_then(|value| value.as_str())
+                        .unwrap_or(event.entity_id.as_str());
+                    self.upsert_item_content(
+                        entry_id,
+                        payload.get("content_html").and_then(|value| value.as_str()),
+                        payload.get("content_text").and_then(|value| value.as_str()),
+                    )?;
+                    applied += 1;
+                }
+                "item_state" => {
+                    let payload: SyncItemStatePayload =
+                        serde_json::from_str(&event.payload_json)
+                            .map_err(|err| StorageError::Serialization(err.to_string()))?;
+                    let entry_id = self.resolve_entry_id_by_identity(
+                        payload.item_id.as_deref(),
+                        payload.canonical_url.as_deref(),
+                        payload.external_item_id.as_deref(),
+                    )?;
+                    if let Some(entry_id) = entry_id {
+                        self.patch_item_state(
+                            &entry_id,
+                            &ItemStatePatch {
+                                is_read: Some(payload.is_read),
+                                is_starred: Some(payload.is_starred),
+                                is_saved_for_later: Some(payload.is_saved_for_later),
+                                is_archived: Some(payload.is_archived),
+                            },
+                        )?;
+                        applied += 1;
+                    }
+                }
+                "notification_settings" => {
+                    let payload: SyncFeedNotificationSettingsPayload =
+                        serde_json::from_str(&event.payload_json)
+                            .map_err(|err| StorageError::Serialization(err.to_string()))?;
+                    let feed_id =
+                        if let Some(feed_id) = self.resolve_feed_id_by_url(&payload.feed_url)? {
+                            feed_id
+                        } else {
+                            self.upsert_feed(&NewFeed {
+                                feed_url: Url::parse(&payload.feed_url)
+                                    .map_err(|err| StorageError::Serialization(err.to_string()))?,
+                                site_url: None,
+                                title: None,
+                                feed_type: FeedType::Unknown,
+                            })?
+                        };
+                    let _ = self.upsert_notification_settings(&feed_id, &payload.settings)?;
+                    applied += 1;
+                }
+                "notification_globals" => {
+                    let payload: SyncGlobalNotificationSettingsPayload =
+                        serde_json::from_str(&event.payload_json)
+                            .map_err(|err| StorageError::Serialization(err.to_string()))?;
+                    self.set_global_notification_settings(&payload.settings)?;
+                    applied += 1;
+                }
+                "feed_refresh_settings" => {
+                    let payload: SyncFeedRefreshSettingsPayload =
+                        serde_json::from_str(&event.payload_json)
+                            .map_err(|err| StorageError::Serialization(err.to_string()))?;
+                    let feed_id =
+                        if let Some(feed_id) = self.resolve_feed_id_by_url(&payload.feed_url)? {
+                            feed_id
+                        } else if event.event_type == "deleted" {
+                            continue;
+                        } else {
+                            self.upsert_feed(&NewFeed {
+                                feed_url: Url::parse(&payload.feed_url)
+                                    .map_err(|err| StorageError::Serialization(err.to_string()))?,
+                                site_url: None,
+                                title: None,
+                                feed_type: FeedType::Unknown,
+                            })?
+                        };
+                    if event.event_type == "deleted" {
+                        self.conn.execute(
+                            "DELETE FROM feed_refresh_settings WHERE feed_id = ?1",
+                            params![feed_id],
+                        )?;
+                    } else {
+                        let _ = self.upsert_feed_refresh_settings(&feed_id, &payload.settings)?;
+                    }
+                    applied += 1;
+                }
+                "group_refresh_settings" => {
+                    let payload: SyncGroupRefreshSettingsPayload =
+                        serde_json::from_str(&event.payload_json)
+                            .map_err(|err| StorageError::Serialization(err.to_string()))?;
+                    if event.event_type == "deleted" {
+                        if let Some(group_id) =
+                            self.resolve_group_id_by_name(&payload.group_name)?
+                        {
+                            self.conn.execute(
+                                "DELETE FROM group_refresh_settings WHERE group_id = ?1",
+                                params![group_id],
+                            )?;
+                        }
+                    } else {
+                        let group_id = self.create_group(&payload.group_name)?.id;
+                        let _ = self.upsert_group_refresh_settings(&group_id, &payload.settings)?;
+                    }
+                    applied += 1;
+                }
+                _ => {}
+            }
+        }
+
+        Ok(applied)
     }
 
     /// Return pending sync events ordered by creation timestamp.
@@ -2109,14 +3001,20 @@ fn compute_next_scheduled_fetch(
     is_new_feed: bool,
     health_state: FeedHealthState,
     failure_count: u32,
+    interval_minutes: u32,
 ) -> chrono::DateTime<chrono::Utc> {
+    let base_minutes = interval_minutes.max(1);
     let base = if is_new_feed {
-        chrono::Duration::minutes(15)
+        chrono::Duration::minutes(base_minutes as i64)
     } else {
         match health_state {
-            FeedHealthState::Healthy => chrono::Duration::hours(1),
-            FeedHealthState::Stale => chrono::Duration::hours(3),
-            FeedHealthState::Failing => chrono::Duration::hours(6),
+            FeedHealthState::Healthy => chrono::Duration::minutes(base_minutes as i64),
+            FeedHealthState::Stale => {
+                chrono::Duration::minutes(base_minutes.saturating_mul(3) as i64)
+            }
+            FeedHealthState::Failing => {
+                chrono::Duration::minutes(base_minutes.saturating_mul(6) as i64)
+            }
         }
     };
     let multiplier = 2u32.saturating_pow(failure_count.min(6));
@@ -2307,15 +3205,15 @@ mod tests {
     use chrono::Utc;
     use models::{
         DigestPolicy, FeedHealthState, FeedType, GlobalNotificationSettings, ItemStatePatch,
-        NewFeed, NormalizedItem, NotificationDeliveryState, NotificationDigest, NotificationEvent,
-        NotificationMode, NotificationSettings, QuietHours,
+        NewEntry, NewFeed, NormalizedItem, NotificationDeliveryState, NotificationDigest,
+        NotificationEvent, NotificationMode, NotificationSettings, QuietHours, RefreshSettings,
     };
     use rusqlite::params;
     use serde_json::Value;
     use url::Url;
     use uuid::Uuid;
 
-    use super::Storage;
+    use super::{Storage, SyncEventRecord};
 
     fn sample_item(feed_id: &str, item_id: &str) -> NormalizedItem {
         NormalizedItem {
@@ -2739,23 +3637,30 @@ mod tests {
             .expect("patch state");
 
         let pending = storage.list_pending_sync_events(10).expect("list pending");
-        assert_eq!(pending.len(), 1);
-        assert_eq!(pending[0].entity_type, "item_state");
-        assert_eq!(pending[0].entity_id, "item-1");
-        assert_eq!(pending[0].event_type, "updated");
-        assert!(pending[0].processed_at.is_none());
-        assert!(!pending[0].created_at.is_empty());
+        assert!(pending.iter().any(|event| event.entity_type == "feed"));
+        let item_state_event = pending
+            .iter()
+            .find(|event| {
+                event.entity_type == "item_state"
+                    && event.entity_id == "item-1"
+                    && event.event_type == "updated"
+            })
+            .expect("item state event");
+        assert!(item_state_event.processed_at.is_none());
+        assert!(!item_state_event.created_at.is_empty());
 
-        let payload: Value = serde_json::from_str(&pending[0].payload_json).expect("payload json");
+        let payload: Value =
+            serde_json::from_str(&item_state_event.payload_json).expect("payload json");
         assert_eq!(payload["item_id"], "item-1");
-        assert_eq!(payload["previous_state"]["is_read"], false);
-        assert_eq!(payload["current_state"]["is_read"], true);
+        assert_eq!(payload["is_read"], true);
+        assert_eq!(payload["is_starred"], false);
 
-        let acknowledged =
-            storage.acknowledge_sync_events(&[pending[0].id.clone()]).expect("ack sync event");
+        let acknowledged = storage
+            .acknowledge_sync_events(std::slice::from_ref(&item_state_event.id))
+            .expect("ack sync event");
         assert_eq!(acknowledged, 1);
         let pending_after_ack = storage.list_pending_sync_events(10).expect("list pending");
-        assert!(pending_after_ack.is_empty());
+        assert!(pending_after_ack.iter().all(|event| event.entity_type != "item_state"));
 
         storage
             .patch_item_state(
@@ -2769,7 +3674,7 @@ mod tests {
             )
             .expect("no-op patch");
         let pending_after_noop = storage.list_pending_sync_events(10).expect("list pending");
-        assert!(pending_after_noop.is_empty());
+        assert!(pending_after_noop.iter().all(|event| event.entity_type != "item_state"));
     }
 
     #[test]
@@ -2801,11 +3706,14 @@ mod tests {
         assert!(row.settings.enabled);
         assert_eq!(row.settings.mode, NotificationMode::Digest);
         assert_eq!(row.settings.digest_policy.max_items, 12);
+        assert!(chrono::DateTime::parse_from_rfc3339(&row.updated_at).is_ok());
         let loaded_settings = storage
             .get_notification_settings(&feed_id)
             .expect("load settings")
             .expect("settings row");
         assert_eq!(loaded_settings.settings.digest_policy.max_items, 12);
+        assert!(chrono::DateTime::parse_from_rfc3339(&loaded_settings.updated_at).is_ok());
+        assert_eq!(loaded_settings.updated_at, row.updated_at);
 
         let globals = GlobalNotificationSettings::default();
         storage.set_global_notification_settings(&globals).expect("set globals");
@@ -2877,5 +3785,151 @@ mod tests {
             delivered_at: None,
         };
         storage.insert_notification_digest(&digest, "[\"entry-1\"]").expect("insert digest");
+    }
+
+    #[test]
+    fn refresh_settings_inherit_and_override_by_scope() {
+        let mut storage = Storage::open_in_memory().expect("open");
+        storage.migrate().expect("migrate");
+
+        let feed_id = storage
+            .upsert_feed(&NewFeed {
+                feed_url: Url::parse("https://example.com/feed.xml").expect("url parse"),
+                site_url: Some(Url::parse("https://example.com").expect("url parse")),
+                title: Some("Example".to_owned()),
+                feed_type: FeedType::Rss,
+            })
+            .expect("upsert feed");
+        let group = storage.create_group("Tech").expect("create group");
+        storage.set_feed_group(&feed_id, Some(&group.id)).expect("assign group");
+
+        let globals = GlobalNotificationSettings {
+            background_refresh_enabled: true,
+            background_refresh_interval_minutes: 30,
+            digest_policy: DigestPolicy::default(),
+            default_feed_settings: NotificationSettings::default(),
+        };
+        storage.set_global_notification_settings(&globals).expect("set globals");
+
+        let effective =
+            storage.resolve_effective_refresh_settings(&feed_id).expect("resolve effective");
+        assert!(effective.enabled);
+        assert_eq!(effective.interval_minutes, 30);
+
+        let group_settings = RefreshSettings { enabled: true, interval_minutes: 90 };
+        storage
+            .upsert_group_refresh_settings(&group.id, &group_settings)
+            .expect("upsert group refresh settings");
+        let effective_after_group = storage
+            .resolve_effective_refresh_settings(&feed_id)
+            .expect("resolve effective after group");
+        assert_eq!(effective_after_group.interval_minutes, 90);
+
+        let feed_settings = RefreshSettings { enabled: false, interval_minutes: 5 };
+        storage
+            .upsert_feed_refresh_settings(&feed_id, &feed_settings)
+            .expect("upsert feed refresh settings");
+        let effective_after_feed = storage
+            .resolve_effective_refresh_settings(&feed_id)
+            .expect("resolve effective after feed");
+        assert!(!effective_after_feed.enabled);
+        assert_eq!(effective_after_feed.interval_minutes, 5);
+
+        let due_feeds = storage.list_due_feeds(10).expect("list due feeds");
+        assert!(due_feeds.is_empty());
+    }
+
+    #[test]
+    fn apply_sync_events_replays_feeds_groups_and_notes() {
+        let mut source = Storage::open_in_memory().expect("open");
+        source.migrate().expect("migrate");
+
+        let feed_id = source
+            .upsert_feed(&NewFeed {
+                feed_url: Url::parse("https://example.com/feed.xml").expect("url parse"),
+                site_url: Some(Url::parse("https://example.com").expect("url parse")),
+                title: Some("Example".to_owned()),
+                feed_type: FeedType::Rss,
+            })
+            .expect("upsert feed");
+        let group = source.create_group("Tech").expect("create group");
+        source.set_feed_group(&feed_id, Some(&group.id)).expect("set group");
+        source
+            .upsert_entries(&[NewEntry {
+                id: Some("note-1".to_owned()),
+                kind: models::EntryKind::Note,
+                source: models::EntrySource {
+                    source_kind: models::EntrySourceKind::Manual,
+                    source_id: None,
+                    source_url: None,
+                    source_title: Some("manual".to_owned()),
+                },
+                external_item_id: None,
+                canonical_url: None,
+                title: "Sync me".to_owned(),
+                author: None,
+                summary: Some("Sync summary".to_owned()),
+                content_html: None,
+                content_text: Some("Sync body".to_owned()),
+                published_at: None,
+                updated_at: None,
+                raw_hash: "note-1".to_owned(),
+                dedup_reason: None,
+                duplicate_of_entry_id: None,
+            }])
+            .expect("upsert note");
+        source
+            .patch_item_state(
+                "note-1",
+                &ItemStatePatch {
+                    is_read: Some(true),
+                    is_starred: Some(true),
+                    is_saved_for_later: Some(true),
+                    is_archived: Some(false),
+                },
+            )
+            .expect("patch note");
+
+        let events = source.list_pending_sync_events(100).expect("list events");
+        assert!(!events.is_empty());
+
+        let mut target = Storage::open_in_memory().expect("open target");
+        target.migrate().expect("migrate target");
+        let applied = target
+            .apply_sync_events(
+                &events
+                    .iter()
+                    .map(|event| SyncEventRecord {
+                        id: event.id.clone(),
+                        entity_type: event.entity_type.clone(),
+                        entity_id: event.entity_id.clone(),
+                        event_type: event.event_type.clone(),
+                        payload_json: event.payload_json.clone(),
+                        created_at: event.created_at.clone(),
+                    })
+                    .collect::<Vec<_>>(),
+            )
+            .expect("apply sync events");
+        assert!(applied >= 3);
+
+        let feeds = target.list_feeds().expect("list feeds");
+        assert_eq!(feeds.len(), 1);
+        assert_eq!(feeds[0].feed_url.as_str(), "https://example.com/feed.xml");
+
+        let groups = target.list_groups().expect("list groups");
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].name, "Tech");
+
+        let group_members =
+            target.list_groups_for_feed(&feeds[0].id).expect("list groups for feed");
+        assert_eq!(group_members.len(), 1);
+        assert_eq!(group_members[0].name, "Tech");
+
+        let detail = target.get_item_detail("note-1").expect("note detail");
+        assert_eq!(detail.title, "Sync me");
+        let state = target.get_item_state("note-1").expect("note state");
+        assert!(state.is_read);
+        assert!(state.is_starred);
+        assert!(state.is_saved_for_later);
     }
 }

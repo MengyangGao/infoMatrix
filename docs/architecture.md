@@ -38,6 +38,37 @@ Flutter provides a mature and productive UI path for non-Apple platforms:
 
 ## Layering
 
+```mermaid
+flowchart TB
+  subgraph Shells["UI shells"]
+    Apple["SwiftUI shell"]
+    Flutter["Flutter shell"]
+  end
+
+  subgraph Rust["Rust core"]
+    FFI["ffi_bridge"]
+    Core["app_core"]
+    Discovery["discovery"]
+    Fetcher["fetcher"]
+    Parser["parser"]
+    Storage["storage / SQLite"]
+    Notifications["notifications"]
+    Sync["sync"]
+    Server["app_server"]
+  end
+
+  Apple --> FFI
+  Flutter --> FFI
+  FFI --> Core
+  Core --> Discovery
+  Core --> Fetcher
+  Core --> Parser
+  Core --> Storage
+  Core --> Notifications
+  Core --> Sync
+  Server --> Core
+```
+
 ### Rust Core (`core/crates/*`)
 
 - `discovery`: site URL normalization and feed discovery pipeline
@@ -59,6 +90,15 @@ Flutter provides a mature and productive UI path for non-Apple platforms:
 - `visionOS` remains follow-up work because the current Apple XCFramework only ships macOS and iOS slices
 - Item selection in the shell should stay lightweight: load local item detail first, and keep full-text extraction as an explicit user action so state mutations and sidebar refreshes do not depend on external page fetches.
 - Notification permission handling and local delivery belong in the shell layer, but refresh orchestration, deduplication, policy evaluation, and durable audit state stay in Rust.
+
+### Shared Presentation Contract
+
+Both shells should render from the same screen-state contract instead of duplicating view logic around raw backend rows.
+
+- `ReaderScreenState` describes the current inbox/list/detail shell state.
+- `ReaderSidebarSectionState`, `ReaderSidebarRowState`, and `ReaderDetailPaneState` describe the visible presentation slots.
+- `ActionDescriptor`, `LoadingState`, and `ErrorState` keep interaction and status metadata explicit.
+- Domain models stay in Rust and shell-specific formatting stays in the shell, but the shape of a screen should be shared so future UI changes land in one contract first.
 
 ### Runtime Refresh Loop
 
@@ -99,8 +139,9 @@ Sync is treated as an architecture boundary rather than an MVP feature toggle:
 
 - all key writes map to local events
 - state mutation records use explicit timestamps
-- adapters can target local-only, self-hosted, and third-party sync systems without rewriting core models
+- adapters can target local-only, self-hosted, third-party, and Apple CloudKit sync systems without rewriting core models
 - the local event queue is inspectable and ackable via explicit APIs (`/api/v1/sync/events*`)
+- the Apple shell currently owns the first remote adapter, while non-Apple shells remain local-only
 
 ## Refresh and Icon Pipeline
 
@@ -116,3 +157,11 @@ Icon handling is also local-first:
 - the `icon` crate ranks candidate icons deterministically
 - `app_server` fetches candidate assets, validates them, writes cached files to disk, and persists metadata in SQLite
 - favicon fallback is cached when no better candidate is available
+
+## Distribution Boundary
+
+The public release pipeline is intentionally separate from runtime architecture:
+
+- GitHub Releases is the user-facing distribution point.
+- The release workflow packages macOS, iOS simulator/device, Windows, Linux, and Android artifacts from the same Rust-backed core.
+- Documentation should name the actual downloadable bundles instead of implying a separate installer service.

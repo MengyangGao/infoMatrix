@@ -7,11 +7,15 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		096B13C00C9C2AD39C6BE6C7 /* CloudKitSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC4EF74928F3A827F7F4FA67 /* CloudKitSyncManager.swift */; };
+		0CEA9E031B529927CD9373AD /* CloudKitSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC4EF74928F3A827F7F4FA67 /* CloudKitSyncManager.swift */; };
 		1386D7D8EED89606320E4C0C /* ReaderService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E2035510E827770C55D39E /* ReaderService.swift */; };
 		1C4803D96D9930061E4B0D4E /* ReaderShellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B510BE0036ABB30DDBA9348 /* ReaderShellView.swift */; };
+		218D25988DA4CAC16416822A /* ReaderPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6294E619A98A375760DD312 /* ReaderPresentation.swift */; };
 		2597FBA6573C9C2114E8DAA4 /* InfoMatrixShell.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = AC5EE5B4830F9E5449B93570 /* InfoMatrixShell.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		37B96D9C63782E58BDCBC17C /* iPadApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB1363C7A5260B658C79CBEF /* iPadApp.swift */; };
 		435AF79E69CF66C6231F615C /* MacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00F64D960924A645E1FF233D /* MacApp.swift */; };
+		466EBF01E574B7EC49C2C949 /* CloudKitSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC4EF74928F3A827F7F4FA67 /* CloudKitSyncManager.swift */; };
 		47410D2A85626BD4E1DAEA78 /* NativeReaderService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F71DE9450536D7C5A0198E86 /* NativeReaderService.swift */; };
 		4765C7DD085022A887167C6C /* InfoMatrixCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4D1DD56DBA5E67A387EE7C8E /* InfoMatrixCore.xcframework */; };
 		5B07608B43AA41F9BC8C6E43 /* iOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F93652CD9A6BD0554D517D0 /* iOSApp.swift */; };
@@ -19,6 +23,7 @@
 		636B69F470A1FBE7C72DB671 /* InfoMatrixApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94476E434BC313B3149EFC2F /* InfoMatrixApp.swift */; };
 		6481C00F0D7BEF9D724355F0 /* InfoMatrixCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4D1DD56DBA5E67A387EE7C8E /* InfoMatrixCore.xcframework */; };
 		6B466402492C3FD2731FB08C /* AppStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61010C5061315628BF3FA52C /* AppStateTests.swift */; };
+		6D88BB833C0CE8AAA967B189 /* NativeReaderServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 969A0251DD5272C4677E8344 /* NativeReaderServiceTests.swift */; };
 		7433BD66588705A77E458AA9 /* ReaderService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E2035510E827770C55D39E /* ReaderService.swift */; };
 		80319543E0E0F107C534F6FC /* NotificationDeliveryCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31F37F5FC609FBC1C7CCF19F /* NotificationDeliveryCoordinator.swift */; };
 		806A69D57DD521BE81230B10 /* InfoMatrixShell.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AC5EE5B4830F9E5449B93570 /* InfoMatrixShell.framework */; };
@@ -26,6 +31,7 @@
 		83C81C6AAF53A1C89C5DD1F2 /* ReaderShellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B510BE0036ABB30DDBA9348 /* ReaderShellView.swift */; };
 		87F537454C3DD50F52E78E09 /* ReaderService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E2035510E827770C55D39E /* ReaderService.swift */; };
 		8B6F6822EFBF7473E32BD9EB /* NativeReaderService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F71DE9450536D7C5A0198E86 /* NativeReaderService.swift */; };
+		9245CDF689E5184332C4BEB1 /* ReaderPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6294E619A98A375760DD312 /* ReaderPresentation.swift */; };
 		9332ADBF1DE5DF98FF197564 /* NativeReaderService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F71DE9450536D7C5A0198E86 /* NativeReaderService.swift */; };
 		94EF842D9F837B63F4B6A8C5 /* ReaderService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E2035510E827770C55D39E /* ReaderService.swift */; };
 		9A5F31BA0E649F26DDAC1109 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D8B726220713CAAA2918416 /* Models.swift */; };
@@ -37,9 +43,12 @@
 		C39C223A11DE0888A70BEE5D /* InfoMatrixCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4D1DD56DBA5E67A387EE7C8E /* InfoMatrixCore.xcframework */; };
 		C497371737BCA72742494211 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D8B726220713CAAA2918416 /* Models.swift */; };
 		C73D7BF652A230937E29CA0C /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D8B726220713CAAA2918416 /* Models.swift */; };
+		C9F39D9CCEA127104A00A2DF /* ReaderPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6294E619A98A375760DD312 /* ReaderPresentation.swift */; };
 		D22BDD8AD9DAA7035E03F666 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D8B726220713CAAA2918416 /* Models.swift */; };
+		D6F5B472F1B2D447D589E189 /* ReaderPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6294E619A98A375760DD312 /* ReaderPresentation.swift */; };
 		D837963BA5E390EDBC2F8907 /* InfoMatrixCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4D1DD56DBA5E67A387EE7C8E /* InfoMatrixCore.xcframework */; };
 		DCCD6211B9F97F64C0406674 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF02AD7BC013A916EBDF7A5B /* AppState.swift */; };
+		E35AB59451AE71F9BF08A2AB /* CloudKitSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC4EF74928F3A827F7F4FA67 /* CloudKitSyncManager.swift */; };
 		FAE899698AA44E5F677FFFA8 /* InfoMatrixCore.h in Headers */ = {isa = PBXBuildFile; fileRef = 0915017EE615206E08B378A4 /* InfoMatrixCore.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		FC12D8C49863ACED56BFC03B /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF02AD7BC013A916EBDF7A5B /* AppState.swift */; };
 		FC3D567A45A362FB0F8E9454 /* InfoMatrixApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94476E434BC313B3149EFC2F /* InfoMatrixApp.swift */; };
@@ -83,11 +92,14 @@
 		61010C5061315628BF3FA52C /* AppStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateTests.swift; sourceTree = "<group>"; };
 		94476E434BC313B3149EFC2F /* InfoMatrixApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InfoMatrixApp.swift; sourceTree = "<group>"; };
 		94D61405EAEA8221D035D7FF /* InfoMatrix-iPadOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "InfoMatrix-iPadOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		969A0251DD5272C4677E8344 /* NativeReaderServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeReaderServiceTests.swift; sourceTree = "<group>"; };
 		AC5EE5B4830F9E5449B93570 /* InfoMatrixShell.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = InfoMatrixShell.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		C52A12DB8C519F5D5007E15E /* InfoMatrixShellTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = InfoMatrixShellTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C7E2035510E827770C55D39E /* ReaderService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderService.swift; sourceTree = "<group>"; };
+		CC4EF74928F3A827F7F4FA67 /* CloudKitSyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudKitSyncManager.swift; sourceTree = "<group>"; };
 		CF02AD7BC013A916EBDF7A5B /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		DB1363C7A5260B658C79CBEF /* iPadApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iPadApp.swift; sourceTree = "<group>"; };
+		F6294E619A98A375760DD312 /* ReaderPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderPresentation.swift; sourceTree = "<group>"; };
 		F71DE9450536D7C5A0198E86 /* NativeReaderService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeReaderService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -148,6 +160,7 @@
 			isa = PBXGroup;
 			children = (
 				61010C5061315628BF3FA52C /* AppStateTests.swift */,
+				969A0251DD5272C4677E8344 /* NativeReaderServiceTests.swift */,
 			);
 			name = InfoMatrixShellTests;
 			path = ../Tests/InfoMatrixShellTests;
@@ -157,11 +170,13 @@
 			isa = PBXGroup;
 			children = (
 				CF02AD7BC013A916EBDF7A5B /* AppState.swift */,
+				CC4EF74928F3A827F7F4FA67 /* CloudKitSyncManager.swift */,
 				94476E434BC313B3149EFC2F /* InfoMatrixApp.swift */,
 				0915017EE615206E08B378A4 /* InfoMatrixCore.h */,
 				1D8B726220713CAAA2918416 /* Models.swift */,
 				1032136E76B066EEBEE9E2C3 /* module.modulemap */,
 				F71DE9450536D7C5A0198E86 /* NativeReaderService.swift */,
+				F6294E619A98A375760DD312 /* ReaderPresentation.swift */,
 				C7E2035510E827770C55D39E /* ReaderService.swift */,
 				4B510BE0036ABB30DDBA9348 /* ReaderShellView.swift */,
 			);
@@ -377,9 +392,11 @@
 			buildActionMask = 2147483647;
 			files = (
 				5DB783E55FCC1366D27BE873 /* AppState.swift in Sources */,
+				E35AB59451AE71F9BF08A2AB /* CloudKitSyncManager.swift in Sources */,
 				636B69F470A1FBE7C72DB671 /* InfoMatrixApp.swift in Sources */,
 				9A5F31BA0E649F26DDAC1109 /* Models.swift in Sources */,
 				9332ADBF1DE5DF98FF197564 /* NativeReaderService.swift in Sources */,
+				218D25988DA4CAC16416822A /* ReaderPresentation.swift in Sources */,
 				87F537454C3DD50F52E78E09 /* ReaderService.swift in Sources */,
 				83C81C6AAF53A1C89C5DD1F2 /* ReaderShellView.swift in Sources */,
 				37B96D9C63782E58BDCBC17C /* iPadApp.swift in Sources */,
@@ -391,6 +408,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				6B466402492C3FD2731FB08C /* AppStateTests.swift in Sources */,
+				6D88BB833C0CE8AAA967B189 /* NativeReaderServiceTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -399,11 +417,13 @@
 			buildActionMask = 2147483647;
 			files = (
 				FC12D8C49863ACED56BFC03B /* AppState.swift in Sources */,
+				466EBF01E574B7EC49C2C949 /* CloudKitSyncManager.swift in Sources */,
 				BD5A718556EAA5ADFBFB50DD /* InfoMatrixApp.swift in Sources */,
 				435AF79E69CF66C6231F615C /* MacApp.swift in Sources */,
 				C73D7BF652A230937E29CA0C /* Models.swift in Sources */,
 				47410D2A85626BD4E1DAEA78 /* NativeReaderService.swift in Sources */,
 				80319543E0E0F107C534F6FC /* NotificationDeliveryCoordinator.swift in Sources */,
+				D6F5B472F1B2D447D589E189 /* ReaderPresentation.swift in Sources */,
 				1386D7D8EED89606320E4C0C /* ReaderService.swift in Sources */,
 				BCA6557651712126920DABFA /* ReaderShellView.swift in Sources */,
 			);
@@ -414,9 +434,11 @@
 			buildActionMask = 2147483647;
 			files = (
 				BB38519ED74E9C7735834A76 /* AppState.swift in Sources */,
+				0CEA9E031B529927CD9373AD /* CloudKitSyncManager.swift in Sources */,
 				BB61F5CA85A90F9633EA420D /* InfoMatrixApp.swift in Sources */,
 				D22BDD8AD9DAA7035E03F666 /* Models.swift in Sources */,
 				8350F5A1D0CCCE47B62C2C76 /* NativeReaderService.swift in Sources */,
+				C9F39D9CCEA127104A00A2DF /* ReaderPresentation.swift in Sources */,
 				94EF842D9F837B63F4B6A8C5 /* ReaderService.swift in Sources */,
 				9CC16FDD6A89BB58DB4449A6 /* ReaderShellView.swift in Sources */,
 			);
@@ -427,9 +449,11 @@
 			buildActionMask = 2147483647;
 			files = (
 				DCCD6211B9F97F64C0406674 /* AppState.swift in Sources */,
+				096B13C00C9C2AD39C6BE6C7 /* CloudKitSyncManager.swift in Sources */,
 				FC3D567A45A362FB0F8E9454 /* InfoMatrixApp.swift in Sources */,
 				C497371737BCA72742494211 /* Models.swift in Sources */,
 				8B6F6822EFBF7473E32BD9EB /* NativeReaderService.swift in Sources */,
+				9245CDF689E5184332C4BEB1 /* ReaderPresentation.swift in Sources */,
 				7433BD66588705A77E458AA9 /* ReaderService.swift in Sources */,
 				1C4803D96D9930061E4B0D4E /* ReaderShellView.swift in Sources */,
 				5B07608B43AA41F9BC8C6E43 /* iOSApp.swift in Sources */,

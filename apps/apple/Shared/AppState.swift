@@ -51,11 +51,19 @@ public final class AppState: ObservableObject {
     @Published public var isLoading: Bool
     @Published public var searchQuery: String
     @Published public private(set) var pendingDiscoverySelection: PendingDiscoverySelection?
+    @Published public private(set) var syncStatus: CloudKitSyncStatus?
 
     private let service: ReaderService
+    private let syncCoordinator: CloudKitSyncCoordinator?
 
-    public init(service: ReaderService, feeds: [Feed] = [], items: [ArticleItem] = []) {
+    public init(
+        service: ReaderService,
+        syncCoordinator: CloudKitSyncCoordinator? = nil,
+        feeds: [Feed] = [],
+        items: [ArticleItem] = []
+    ) {
         self.service = service
+        self.syncCoordinator = syncCoordinator
         self.feeds = feeds
         self.groups = []
         self.items = items
@@ -69,10 +77,12 @@ public final class AppState: ObservableObject {
         self.isLoading = false
         self.searchQuery = ""
         self.pendingDiscoverySelection = nil
+        self.syncStatus = syncCoordinator?.status
     }
 
     public func bootstrap() async {
         await reloadFeeds()
+        await refreshSyncStatus()
     }
 
     public func reloadFeeds() async {
@@ -195,6 +205,26 @@ public final class AppState: ObservableObject {
 
     public func dismissDiscoverySelection() {
         pendingDiscoverySelection = nil
+    }
+
+    public func setCloudKitSyncEnabled(_ enabled: Bool) {
+        syncCoordinator?.setEnabled(enabled)
+        syncStatus = syncCoordinator?.status
+    }
+
+    public func refreshSyncStatus() async {
+        guard let syncCoordinator else {
+            syncStatus = nil
+            return
+        }
+        await syncCoordinator.refreshStatus()
+        syncStatus = syncCoordinator.status
+    }
+
+    public func syncNow() async {
+        guard let syncCoordinator else { return }
+        await syncCoordinator.syncNow()
+        syncStatus = syncCoordinator.status
     }
 
     @discardableResult
@@ -564,6 +594,72 @@ public final class AppState: ObservableObject {
         do {
             _ = try await service.updateFeedNotificationSettings(feedID: feedID, settings: settings)
             errorMessage = "订阅通知设置已保存"
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    public func loadFeedRefreshSettings(feedID: String) async -> RefreshSettings? {
+        do {
+            return try await service.getFeedRefreshSettings(feedID: feedID)
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    @discardableResult
+    public func saveFeedRefreshSettings(feedID: String, settings: RefreshSettings) async -> Bool {
+        do {
+            _ = try await service.updateFeedRefreshSettings(feedID: feedID, settings: settings)
+            errorMessage = "订阅自动刷新设置已保存"
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    @discardableResult
+    public func resetFeedRefreshSettings(feedID: String) async -> Bool {
+        do {
+            _ = try await service.deleteFeedRefreshSettings(feedID: feedID)
+            errorMessage = "订阅自动刷新设置已恢复默认"
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    public func loadGroupRefreshSettings(groupID: String) async -> RefreshSettings? {
+        do {
+            return try await service.getGroupRefreshSettings(groupID: groupID)
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    @discardableResult
+    public func saveGroupRefreshSettings(groupID: String, settings: RefreshSettings) async -> Bool {
+        do {
+            _ = try await service.updateGroupRefreshSettings(groupID: groupID, settings: settings)
+            errorMessage = "分类自动刷新设置已保存"
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    @discardableResult
+    public func resetGroupRefreshSettings(groupID: String) async -> Bool {
+        do {
+            _ = try await service.deleteGroupRefreshSettings(groupID: groupID)
+            errorMessage = "分类自动刷新设置已恢复默认"
             return true
         } catch {
             errorMessage = error.localizedDescription
@@ -1056,5 +1152,171 @@ public final class AppState: ObservableObject {
             }
         }
         return detail
+    }
+}
+
+public extension AppState {
+    var readerScreenState: ReaderScreenState {
+        let syncLine: String? = syncStatus.map { status in
+            let statusText: String
+            switch status.accountState {
+            case .available:
+                statusText = "iCloud 可用"
+            case .noAccount:
+                statusText = "未登录 iCloud"
+            case .restricted:
+                statusText = "iCloud 受限"
+            case .couldNotDetermine:
+                statusText = "状态未知"
+            case .temporarilyUnavailable:
+                statusText = "iCloud 暂不可用"
+            }
+            return "\(statusText) · 待同步 \(status.pendingLocalEventCount) 条"
+        }
+
+        return ReaderScreenState(
+            headerTitle: scopeTitleForPresentation,
+            headerSubtitle: scopeSubtitleForPresentation,
+            sidebarSections: [
+                ReaderSidebarSectionState(
+                    id: "special",
+                    title: "首页",
+                    rows: specialScopeRows
+                ),
+                ReaderSidebarSectionState(
+                    id: "groups",
+                    title: "分类",
+                    rows: groups.map { group in
+                        ReaderSidebarRowState(
+                            id: AppState.groupSelectionPrefix + group.id,
+                            title: group.name,
+                            subtitle: nil,
+                            iconName: "folder.fill",
+                            badgeCount: feeds(inGroupID: group.id).count,
+                            isSelected: currentSelectedGroupID == group.id
+                        )
+                    }
+                ),
+                ReaderSidebarSectionState(
+                    id: "feeds",
+                    title: "订阅",
+                    rows: feeds.map { feed in
+                        ReaderSidebarRowState(
+                            id: feed.id,
+                            title: feed.title,
+                            subtitle: feed.siteURL?.host ?? feed.feedURL.host,
+                            iconName: "newspaper.fill",
+                            badgeCount: nil,
+                            isSelected: selectedFeedID == feed.id
+                        )
+                    }
+                ),
+            ],
+            detailPane: selectedItemDetail.map { detail in
+                ReaderDetailPaneState(
+                    title: detail.title,
+                    subtitle: detail.canonicalURL?.host,
+                    bodyPreview: detail.summary ?? detail.contentText,
+                    metadata: [detail.kind, detail.sourceKind, detail.publishedAt ?? ""].filter { !$0.isEmpty }
+                )
+            },
+            isLoading: isLoading,
+            errorMessage: errorMessage,
+            syncStatusLine: syncLine
+        )
+    }
+
+    private var specialScopeRows: [ReaderSidebarRowState] {
+        [
+            ReaderSidebarRowState(
+                id: AppState.allItemsSelectionID,
+                title: "全部",
+                iconName: "tray.full",
+                badgeCount: allItemsCount,
+                isSelected: selectedFeedID == AppState.allItemsSelectionID
+            ),
+            ReaderSidebarRowState(
+                id: AppState.unreadSelectionID,
+                title: "未读",
+                iconName: "circle.dashed",
+                badgeCount: unreadItemsCount,
+                isSelected: selectedFeedID == AppState.unreadSelectionID
+            ),
+            ReaderSidebarRowState(
+                id: AppState.starredSelectionID,
+                title: "星标",
+                iconName: "star",
+                badgeCount: starredItemsCount,
+                isSelected: selectedFeedID == AppState.starredSelectionID
+            ),
+            ReaderSidebarRowState(
+                id: AppState.laterSelectionID,
+                title: "稍后读",
+                iconName: "clock",
+                badgeCount: laterItemsCount,
+                isSelected: selectedFeedID == AppState.laterSelectionID
+            ),
+            ReaderSidebarRowState(
+                id: AppState.notesSelectionID,
+                title: "随想",
+                iconName: "square.and.pencil",
+                badgeCount: notesItemsCount,
+                isSelected: selectedFeedID == AppState.notesSelectionID
+            ),
+            ReaderSidebarRowState(
+                id: AppState.archiveSelectionID,
+                title: "归档",
+                iconName: "archivebox",
+                badgeCount: archiveItemsCount,
+                isSelected: selectedFeedID == AppState.archiveSelectionID
+            ),
+        ]
+    }
+
+    private var scopeTitleForPresentation: String {
+        switch selectedFeedID {
+        case AppState.allItemsSelectionID:
+            return "全部"
+        case AppState.unreadSelectionID:
+            return "未读"
+        case AppState.starredSelectionID:
+            return "星标"
+        case AppState.laterSelectionID:
+            return "稍后读"
+        case AppState.notesSelectionID:
+            return "随想"
+        case AppState.archiveSelectionID:
+            return "归档"
+        case let selection? where selection.hasPrefix(AppState.groupSelectionPrefix):
+            let groupID = String(selection.dropFirst(AppState.groupSelectionPrefix.count))
+            return groups.first(where: { $0.id == groupID })?.name ?? "分类"
+        default:
+            if let feed = feeds.first(where: { $0.id == selectedFeedID }) {
+                return feed.title
+            }
+            return "订阅"
+        }
+    }
+
+    private var scopeSubtitleForPresentation: String {
+        if let groupID = currentSelectedGroupID {
+            let feedCount = feeds(inGroupID: groupID).count
+            return "\(items.count) 条内容 · \(feedCount) 个订阅"
+        }
+        if let feedID = selectedFeedID, !isSpecialSelection(feedID) {
+            return "\(items.count) 条条目"
+        }
+        return "\(items.count) 条内容"
+    }
+
+    private var currentSelectedGroupID: String? {
+        guard let selectedFeedID else { return nil }
+        return selectedGroupID(from: selectedFeedID)
+    }
+
+    private func feeds(inGroupID groupID: String) -> [Feed] {
+        feeds.filter { feed in
+            feed.groups.contains(where: { $0.id == groupID })
+        }
     }
 }

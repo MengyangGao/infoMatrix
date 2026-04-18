@@ -1,12 +1,13 @@
 # Sync Foundation
 
-Sync is not shipped in MVP but its interface is defined immediately.
+Sync is a cross-platform architecture boundary, but the first shipped remote backend is Apple-only CloudKit sync. Android, Linux, and Windows remain local-only for now.
 
 ## Principles
 
 - local writes are represented as events
 - syncable state carries monotonic `updated_at`
 - delete/clear style actions should preserve semantic intent via tombstones/events
+- Apple devices can exchange those events through CloudKit, while the local SQLite journal remains the source of truth
 
 ## Components
 
@@ -15,14 +16,18 @@ Sync is not shipped in MVP but its interface is defined immediately.
   - event model
   - adapter trait
   - local-only no-op adapter and future conflict-resolution hooks
+- Apple shell:
+  - CloudKit sync coordinator
+  - account state, enablement, and retry status
+  - local queue upload / remote event pull orchestration
 
 ## Local Event Queue Semantics
 
 - Item state writes (`read`, `starred`, `saved_for_later`, `archived`) append an `item_state` `updated` event when state actually changes.
 - Event payload stores:
-  - requested patch fields
-  - previous state snapshot
-  - current state snapshot
+  - `item_id`
+  - stable identity hints (`canonical_url`, `external_item_id`)
+  - the current boolean item state
   - mutation timestamp
 - Events stay pending while `processed_at IS NULL`.
 - Acknowledge is explicit: queue consumers set `processed_at` when an event is safely handled.
@@ -51,3 +56,4 @@ Sync is not shipped in MVP but its interface is defined immediately.
 - self-hosted API adapter
 - WebDAV-like document adapter
 - third-party RSS sync service adapter
+- Apple CloudKit adapter for the SwiftUI shell

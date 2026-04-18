@@ -31,10 +31,24 @@ public final class NativeReaderService: ReaderService, @unchecked Sendable {
             fullPayload["db_path"] = dbPath
         }
         
-        // Filter out nil values for JSONSerialization
         let cleanPayload = fullPayload.compactMapValues { $0 }
-        let jsonData = try JSONSerialization.data(withJSONObject: cleanPayload)
-        let jsonString = String(data: jsonData, encoding: .utf8)!
+        let jsonData: Data
+        do {
+            jsonData = try JSONSerialization.data(withJSONObject: cleanPayload)
+        } catch {
+            throw NSError(
+                domain: "InfoMatrix",
+                code: -3,
+                userInfo: [NSLocalizedDescriptionKey: "Failed to encode FFI payload: \(error.localizedDescription)"]
+            )
+        }
+        guard let jsonString = String(data: jsonData, encoding: .utf8) else {
+            throw NSError(
+                domain: "InfoMatrix",
+                code: -3,
+                userInfo: [NSLocalizedDescriptionKey: "Failed to encode FFI payload as UTF-8"]
+            )
+        }
 
         return try jsonString.withCString { cString in
             guard let resultPtr = ffiFunc(cString) else {
@@ -43,7 +57,13 @@ public final class NativeReaderService: ReaderService, @unchecked Sendable {
             defer { infomatrix_core_free_string(resultPtr) }
 
             let resultString = String(cString: resultPtr)
-            let resultData = resultString.data(using: .utf8)!
+            guard let resultData = resultString.data(using: .utf8) else {
+                throw NSError(
+                    domain: "InfoMatrix",
+                    code: -4,
+                    userInfo: [NSLocalizedDescriptionKey: "Failed to decode FFI response as UTF-8"]
+                )
+            }
             let envelope = try JSONDecoder().decode(FFIEnvelope<T>.self, from: resultData)
             
             if envelope.ok, let data = envelope.data {
@@ -63,7 +83,13 @@ public final class NativeReaderService: ReaderService, @unchecked Sendable {
         defer { infomatrix_core_free_string(resultPtr) }
 
         let resultString = String(cString: resultPtr)
-        let resultData = resultString.data(using: .utf8)!
+        guard let resultData = resultString.data(using: .utf8) else {
+            throw NSError(
+                domain: "InfoMatrix",
+                code: -4,
+                userInfo: [NSLocalizedDescriptionKey: "Failed to decode FFI response as UTF-8"]
+            )
+        }
         let envelope = try JSONDecoder().decode(FFIEnvelope<T>.self, from: resultData)
         
         if envelope.ok, let data = envelope.data {
@@ -213,6 +239,66 @@ public final class NativeReaderService: ReaderService, @unchecked Sendable {
         )
     }
 
+    public func getFeedRefreshSettings(feedID: String) async throws -> RefreshSettings {
+        return try callFFI(
+            infomatrix_core_get_feed_refresh_settings_json,
+            payload: ["feed_id": feedID]
+        )
+    }
+
+    public func updateFeedRefreshSettings(
+        feedID: String,
+        settings: RefreshSettings
+    ) async throws -> RefreshSettings {
+        return try callFFI(
+            infomatrix_core_update_feed_refresh_settings_json,
+            payload: [
+                "feed_id": feedID,
+                "settings": [
+                    "enabled": settings.enabled,
+                    "interval_minutes": settings.intervalMinutes,
+                ],
+            ]
+        )
+    }
+
+    public func deleteFeedRefreshSettings(feedID: String) async throws -> RefreshSettings {
+        return try callFFI(
+            infomatrix_core_delete_feed_refresh_settings_json,
+            payload: ["feed_id": feedID]
+        )
+    }
+
+    public func getGroupRefreshSettings(groupID: String) async throws -> RefreshSettings {
+        return try callFFI(
+            infomatrix_core_get_group_refresh_settings_json,
+            payload: ["group_id": groupID]
+        )
+    }
+
+    public func updateGroupRefreshSettings(
+        groupID: String,
+        settings: RefreshSettings
+    ) async throws -> RefreshSettings {
+        return try callFFI(
+            infomatrix_core_update_group_refresh_settings_json,
+            payload: [
+                "group_id": groupID,
+                "settings": [
+                    "enabled": settings.enabled,
+                    "interval_minutes": settings.intervalMinutes,
+                ],
+            ]
+        )
+    }
+
+    public func deleteGroupRefreshSettings(groupID: String) async throws -> RefreshSettings {
+        return try callFFI(
+            infomatrix_core_delete_group_refresh_settings_json,
+            payload: ["group_id": groupID]
+        )
+    }
+
     public func listPendingNotificationEvents(limit: Int) async throws -> [NotificationEvent] {
         return try callFFI(infomatrix_core_list_pending_notification_events_json, payload: ["limit": limit])
     }
@@ -280,6 +366,15 @@ public final class NativeReaderService: ReaderService, @unchecked Sendable {
         struct AckResponse: Decodable { let acknowledged: Int }
         let res: AckResponse = try callFFI(infomatrix_core_ack_sync_events_json, payload: ["event_ids": eventIDs])
         return res.acknowledged
+    }
+
+    public func applySyncEvents(_ events: [SyncEvent]) async throws -> Int {
+        struct ApplyResponse: Decodable { let applied: Int }
+        let res: ApplyResponse = try callFFI(
+            infomatrix_core_apply_sync_events_json,
+            payload: ["events": events]
+        )
+        return res.applied
     }
 
     private struct EmptyResponse: Decodable {}

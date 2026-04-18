@@ -1,7 +1,23 @@
 # Release Checklist
 
 ## Goal
-Ship InfoMatrix as a stable local-first reader with matched Apple and Flutter behavior, and produce release assets that can be uploaded to GitHub Release.
+Ship InfoMatrix as a stable local-first reader with matched Apple and Flutter behavior, and publish installable release assets through GitHub Releases.
+
+## Public Distribution
+
+- Public downloads are published from [GitHub Releases](https://github.com/MengyangGao/infoMatrix/releases).
+- macOS users can also install the app through the project-owned Homebrew cask tap:
+  - `brew tap MengyangGao/infomatrix https://github.com/MengyangGao/infoMatrix`
+  - `brew install --cask infomatrix`
+- The release workflow already produces platform bundles for macOS, iOS, Windows, Linux, and Android.
+- Artifact names are intentionally stable so users can learn one download path per platform:
+  - macOS: `InfoMatrix-macos.dmg`, `InfoMatrix-macos.zip`
+  - iOS simulator: `InfoMatrix-iOS-simulator.zip`
+  - iOS device: `InfoMatrix-iOS.ipa` when signing inputs are present
+  - Windows: `InfoMatrix-windows-x64.msix`, `InfoMatrix-windows-x64.zip`
+  - Linux: `InfoMatrix-linux-x64.deb`
+  - Android: `InfoMatrix-android.apk`, `InfoMatrix-android.aab`
+- Checksum files are published next to each platform bundle so downloads can be verified before installation.
 
 ## Required Checks
 - `tooling/scripts/release_check.sh`
@@ -67,6 +83,11 @@ tooling/scripts/package_macos_release.sh
 open dist/releases/macos/InfoMatrix-macos.dmg
 ```
 Drag `InfoMatrix.app` into Applications after mounting the DMG.
+For Homebrew installation, tap the repo and install the cask:
+```bash
+brew tap MengyangGao/infomatrix https://github.com/MengyangGao/infoMatrix
+brew install --cask infomatrix
+```
 Set `INFOMATRIX_MACOS_SIGNING_IDENTITY` and `INFOMATRIX_MACOS_NOTARIZE=1` to produce a Developer ID signed and notarized bundle. Provide either `INFOMATRIX_MACOS_NOTARY_PROFILE` or `INFOMATRIX_MACOS_NOTARY_APPLE_ID` / `INFOMATRIX_MACOS_NOTARY_APPLE_PASSWORD` / `INFOMATRIX_MACOS_NOTARY_TEAM_ID`.
 
 ### iOS simulator package

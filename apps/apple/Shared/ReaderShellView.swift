@@ -44,6 +44,7 @@ public struct ReaderShellView: View {
     @State private var opmlExportDocument: OPMLTextDocument?
     @State private var activeComposer: EntryComposerKind?
     @State private var notificationSettingsTarget: NotificationSettingsTarget?
+    @State private var refreshSettingsTarget: RefreshSettingsTarget?
 
     private enum FocusedField {
         case subscription
@@ -69,6 +70,20 @@ public struct ReaderShellView: View {
                 return "global"
             case .feed(let feed):
                 return "feed:\(feed.id)"
+            }
+        }
+    }
+
+    fileprivate enum RefreshSettingsTarget: Identifiable {
+        case feed(Feed)
+        case group(FeedGroup)
+
+        var id: String {
+            switch self {
+            case .feed(let feed):
+                return "feed:\(feed.id)"
+            case .group(let group):
+                return "group:\(group.id)"
             }
         }
     }
@@ -163,6 +178,15 @@ public struct ReaderShellView: View {
                 }
             )
         }
+        .sheet(item: $refreshSettingsTarget) { target in
+            RefreshSettingsSheet(
+                target: target,
+                state: state,
+                onCancel: {
+                    refreshSettingsTarget = nil
+                }
+            )
+        }
         .sheet(item: pendingDiscoveryBinding) { selection in
             DiscoverySelectionSheet(
                 selection: selection,
@@ -233,6 +257,9 @@ public struct ReaderShellView: View {
                         subscriptionComposerCard
                             .padding(.bottom, 0)
 
+                        syncStatusCard
+                            .padding(.bottom, 0)
+
                         sidebarSectionHeader("首页")
                         VStack(spacing: 6) {
                             ForEach(SmartFeedShortcut.allCases, id: \.self) { shortcut in
@@ -277,18 +304,36 @@ public struct ReaderShellView: View {
                                     .padding(.horizontal, 2)
                             } else {
                                 ForEach(state.groups, id: \.id) { group in
-                                    Button {
-                                        state.selectGroup(group.id)
-                                    } label: {
-                                        SidebarSummaryRow(
-                                            icon: "folder.fill",
-                                            title: group.name,
-                                            count: feeds(in: group).count,
-                                            isSelected: selectedGroupID == group.id
-                                        )
+                                    HStack(spacing: 6) {
+                                        Button {
+                                            state.selectGroup(group.id)
+                                        } label: {
+                                            SidebarSummaryRow(
+                                                icon: "folder.fill",
+                                                title: group.name,
+                                                count: feeds(in: group).count,
+                                                isSelected: selectedGroupID == group.id
+                                            )
+                                        }
+                                        .buttonStyle(.plain)
+                                        .id(AppState.groupSelectionPrefix + group.id)
+
+                                        Menu {
+                                            Button("自动刷新…") {
+                                                refreshSettingsTarget = .group(group)
+                                            }
+                                            Button("恢复默认刷新") {
+                                                Task {
+                                                    _ = await state.resetGroupRefreshSettings(groupID: group.id)
+                                                }
+                                            }
+                                        } label: {
+                                            Image(systemName: "ellipsis.circle")
+                                                .font(.system(size: 15, weight: .semibold))
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        .buttonStyle(.plain)
                                     }
-                                    .buttonStyle(.plain)
-                                    .id(AppState.groupSelectionPrefix + group.id)
                                 }
                             }
                         }
@@ -751,6 +796,76 @@ public struct ReaderShellView: View {
         )
     }
 
+    private var syncStatusCard: some View {
+        Group {
+            if let syncStatus = state.syncStatus {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("iCloud 同步")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                            Text(accountStateLabel(for: syncStatus.accountState))
+                                .font(.headline)
+                        }
+
+                        Spacer(minLength: 0)
+
+                        Toggle(
+                            "",
+                            isOn: Binding(
+                                get: { syncStatus.enabled },
+                                set: { state.setCloudKitSyncEnabled($0) }
+                            )
+                        )
+                        .labelsHidden()
+                    }
+
+                    Text("待同步 \(syncStatus.pendingLocalEventCount) 条")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    if let lastSyncAt = syncStatus.lastSyncAt {
+                        Text("上次同步 \(lastSyncAt.formatted(date: .abbreviated, time: .shortened))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    HStack(spacing: 8) {
+                        Button {
+                            Task { await state.syncNow() }
+                        } label: {
+                            Text(syncStatus.isSyncing ? "同步中…" : "立即同步")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(syncStatus.isSyncing || !syncStatus.enabled)
+
+                        Button {
+                            Task { await state.refreshSyncStatus() }
+                        } label: {
+                            Text("刷新")
+                        }
+                        .buttonStyle(.bordered)
+                    }
+
+                    if let lastError = syncStatus.lastErrorMessage, !lastError.isEmpty {
+                        Text(lastError)
+                            .font(.caption2)
+                            .foregroundStyle(.red)
+                            .lineLimit(3)
+                    }
+                }
+                .padding(10)
+                .background(cardBackground)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(Color.secondary.opacity(0.10), lineWidth: 1)
+                )
+            }
+        }
+    }
+
     private var selectedGroupID: String? {
         guard let selection = state.selectedFeedID,
               selection.hasPrefix(AppState.groupSelectionPrefix)
@@ -758,6 +873,21 @@ public struct ReaderShellView: View {
             return nil
         }
         return String(selection.dropFirst(AppState.groupSelectionPrefix.count))
+    }
+
+    private func accountStateLabel(for accountState: CloudKitSyncAccountState) -> String {
+        switch accountState {
+        case .available:
+            return "iCloud 可用"
+        case .noAccount:
+            return "未登录 iCloud"
+        case .restricted:
+            return "iCloud 受限"
+        case .temporarilyUnavailable:
+            return "iCloud 暂不可用"
+        case .couldNotDetermine:
+            return "状态未知"
+        }
     }
 
     private func createSidebarGroup() {
@@ -795,11 +925,12 @@ public struct ReaderShellView: View {
     }
 
     private var scopeHeader: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        let screen = state.readerScreenState
+        return VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(scopeTitle)
+                Text(screen.headerTitle)
                     .font(.headline.weight(.semibold))
-                Text(scopeSubtitle)
+                Text(screen.headerSubtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -837,42 +968,6 @@ public struct ReaderShellView: View {
         .background(ReaderShellColors.controlBackground)
     }
 
-    private var scopeTitle: String {
-        switch state.selectedFeedID {
-        case AppState.allItemsSelectionID:
-            return "全部"
-        case AppState.unreadSelectionID:
-            return "未读"
-        case AppState.starredSelectionID:
-            return "星标"
-        case AppState.laterSelectionID:
-            return "稍后读"
-        case AppState.notesSelectionID:
-            return "随想"
-        case AppState.archiveSelectionID:
-            return "归档"
-        case let selection? where selection.hasPrefix(AppState.groupSelectionPrefix):
-            let groupID = String(selection.dropFirst(AppState.groupSelectionPrefix.count))
-            return state.groups.first(where: { $0.id == groupID })?.name ?? "分类"
-        default:
-            if let feed = state.feeds.first(where: { $0.id == state.selectedFeedID }) {
-                return feed.title
-            }
-            return "订阅"
-        }
-    }
-
-    private var scopeSubtitle: String {
-        if let groupID = selectedGroupID {
-            let feedCount = feeds(inGroupID: groupID).count
-            return "\(state.items.count) 条内容 · \(feedCount) 个订阅"
-        }
-        if let feedID = state.selectedFeedID, !isSpecialSelection(feedID) {
-            return "\(state.items.count) 条条目"
-        }
-        return "\(state.items.count) 条内容"
-    }
-
     private func isSpecialSelection(_ feedID: String) -> Bool {
         feedID == AppState.allItemsSelectionID
             || feedID == AppState.unreadSelectionID
@@ -902,12 +997,24 @@ public struct ReaderShellView: View {
         } label: {
             SidebarFeedRow(feed: feed, isSelected: state.selectedFeedID == feed.id)
         }
-        .buttonStyle(.plain)
+                .buttonStyle(.plain)
             .contextMenu {
                 Button {
                     Task { await state.refresh(feedID: feed.id) }
                 } label: {
                     Label("刷新订阅", systemImage: "arrow.clockwise")
+                }
+
+                Button {
+                    refreshSettingsTarget = .feed(feed)
+                } label: {
+                    Label("自动刷新…", systemImage: "clock.arrow.circlepath")
+                }
+
+                Button {
+                    Task { _ = await state.resetFeedRefreshSettings(feedID: feed.id) }
+                } label: {
+                    Label("恢复默认刷新", systemImage: "arrow.uturn.backward")
                 }
 
                 Button {
@@ -1909,6 +2016,89 @@ private struct ArticleHTMLView: View {
     }
 }
 #endif
+
+private struct RefreshSettingsSheet: View {
+    let target: ReaderShellView.RefreshSettingsTarget
+    @ObservedObject var state: AppState
+    let onCancel: () -> Void
+
+    @State private var settings = RefreshSettings()
+    @State private var isLoading = true
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if isLoading {
+                    ProgressView("加载自动刷新设置…")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    Form {
+                        Section {
+                            Toggle("启用自动刷新", isOn: $settings.enabled)
+                            Stepper(
+                                "刷新间隔 \(settings.intervalMinutes) 分钟",
+                                value: $settings.intervalMinutes,
+                                in: 5...1440,
+                                step: 5
+                            )
+                        } footer: {
+                            Text("自动刷新只影响后台轮询调度，不会阻止手动刷新。")
+                        }
+                    }
+                }
+            }
+            .navigationTitle(title)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消", action: onCancel)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") {
+                        Task { await save() }
+                    }
+                    .disabled(isLoading)
+                }
+            }
+        }
+        .frame(minWidth: 420, minHeight: 240)
+        .task {
+            await load()
+        }
+    }
+
+    private var title: String {
+        switch target {
+        case .feed(let feed):
+            return "\(feed.title) 自动刷新"
+        case .group(let group):
+            return "\(group.name) 自动刷新"
+        }
+    }
+
+    private func load() async {
+        switch target {
+        case .feed(let feed):
+            if let loaded = await state.loadFeedRefreshSettings(feedID: feed.id) {
+                settings = loaded
+            }
+        case .group(let group):
+            if let loaded = await state.loadGroupRefreshSettings(groupID: group.id) {
+                settings = loaded
+            }
+        }
+        isLoading = false
+    }
+
+    private func save() async {
+        switch target {
+        case .feed(let feed):
+            _ = await state.saveFeedRefreshSettings(feedID: feed.id, settings: settings)
+        case .group(let group):
+            _ = await state.saveGroupRefreshSettings(groupID: group.id, settings: settings)
+        }
+        onCancel()
+    }
+}
 
 private struct NotificationSettingsSheet: View {
     let target: ReaderShellView.NotificationSettingsTarget

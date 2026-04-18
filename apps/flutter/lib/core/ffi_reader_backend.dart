@@ -331,6 +331,72 @@ class FfiReaderBackend implements ReaderBackend {
   }
 
   @override
+  Future<RefreshSettings> feedRefreshSettings(String feedId) async {
+    final Map<String, dynamic> data = await _callWithDb(
+      'infomatrix_core_get_feed_refresh_settings_json',
+      <String, dynamic>{'feed_id': feedId},
+    );
+    return RefreshSettings.fromJson(data);
+  }
+
+  @override
+  Future<RefreshSettings> updateFeedRefreshSettings(
+    String feedId,
+    RefreshSettings settings,
+  ) async {
+    final Map<String, dynamic> data = await _callWithDb(
+      'infomatrix_core_update_feed_refresh_settings_json',
+      <String, dynamic>{
+        'feed_id': feedId,
+        'settings': settings.toJson(),
+      },
+    );
+    return RefreshSettings.fromJson(data);
+  }
+
+  @override
+  Future<RefreshSettings> deleteFeedRefreshSettings(String feedId) async {
+    final Map<String, dynamic> data = await _callWithDb(
+      'infomatrix_core_delete_feed_refresh_settings_json',
+      <String, dynamic>{'feed_id': feedId},
+    );
+    return RefreshSettings.fromJson(data);
+  }
+
+  @override
+  Future<RefreshSettings> groupRefreshSettings(String groupId) async {
+    final Map<String, dynamic> data = await _callWithDb(
+      'infomatrix_core_get_group_refresh_settings_json',
+      <String, dynamic>{'group_id': groupId},
+    );
+    return RefreshSettings.fromJson(data);
+  }
+
+  @override
+  Future<RefreshSettings> updateGroupRefreshSettings(
+    String groupId,
+    RefreshSettings settings,
+  ) async {
+    final Map<String, dynamic> data = await _callWithDb(
+      'infomatrix_core_update_group_refresh_settings_json',
+      <String, dynamic>{
+        'group_id': groupId,
+        'settings': settings.toJson(),
+      },
+    );
+    return RefreshSettings.fromJson(data);
+  }
+
+  @override
+  Future<RefreshSettings> deleteGroupRefreshSettings(String groupId) async {
+    final Map<String, dynamic> data = await _callWithDb(
+      'infomatrix_core_delete_group_refresh_settings_json',
+      <String, dynamic>{'group_id': groupId},
+    );
+    return RefreshSettings.fromJson(data);
+  }
+
+  @override
   Future<List<NotificationEventModel>> listPendingNotificationEvents({
     int limit = 50,
   }) async {

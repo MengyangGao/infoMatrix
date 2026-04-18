@@ -35,6 +35,12 @@ public protocol ReaderService: Sendable {
     func updateGlobalNotificationSettings(_ settings: GlobalNotificationSettings) async throws -> GlobalNotificationSettings
     func getFeedNotificationSettings(feedID: String) async throws -> NotificationSettings
     func updateFeedNotificationSettings(feedID: String, settings: NotificationSettings) async throws -> NotificationSettings
+    func getFeedRefreshSettings(feedID: String) async throws -> RefreshSettings
+    func updateFeedRefreshSettings(feedID: String, settings: RefreshSettings) async throws -> RefreshSettings
+    func deleteFeedRefreshSettings(feedID: String) async throws -> RefreshSettings
+    func getGroupRefreshSettings(groupID: String) async throws -> RefreshSettings
+    func updateGroupRefreshSettings(groupID: String, settings: RefreshSettings) async throws -> RefreshSettings
+    func deleteGroupRefreshSettings(groupID: String) async throws -> RefreshSettings
     func listPendingNotificationEvents(limit: Int) async throws -> [NotificationEvent]
     func acknowledgeNotificationEvents(eventIDs: [String]) async throws -> Int
     func addSubscription(feedURL: String, title: String?) async throws -> String
@@ -53,6 +59,7 @@ public protocol ReaderService: Sendable {
     func getCoreMeta() async throws -> CoreMeta
     func listPendingSyncEvents(limit: Int) async throws -> [SyncEvent]
     func acknowledgeSyncEvents(eventIDs: [String]) async throws -> Int
+    func applySyncEvents(_ events: [SyncEvent]) async throws -> Int
 }
 
 public struct HTTPReaderService: ReaderService {
@@ -312,6 +319,50 @@ public struct HTTPReaderService: ReaderService {
         return try await decode(request)
     }
 
+    public func getFeedRefreshSettings(feedID: String) async throws -> RefreshSettings {
+        let request = URLRequest(url: baseURL.appending(path: "/api/v1/feeds/\(feedID)/refresh-settings"))
+        return try await decode(request)
+    }
+
+    public func updateFeedRefreshSettings(
+        feedID: String,
+        settings: RefreshSettings
+    ) async throws -> RefreshSettings {
+        var request = URLRequest(url: baseURL.appending(path: "/api/v1/feeds/\(feedID)/refresh-settings"))
+        request.httpMethod = "PUT"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(settings)
+        return try await decode(request)
+    }
+
+    public func deleteFeedRefreshSettings(feedID: String) async throws -> RefreshSettings {
+        var request = URLRequest(url: baseURL.appending(path: "/api/v1/feeds/\(feedID)/refresh-settings"))
+        request.httpMethod = "DELETE"
+        return try await decode(request)
+    }
+
+    public func getGroupRefreshSettings(groupID: String) async throws -> RefreshSettings {
+        let request = URLRequest(url: baseURL.appending(path: "/api/v1/groups/\(groupID)/refresh-settings"))
+        return try await decode(request)
+    }
+
+    public func updateGroupRefreshSettings(
+        groupID: String,
+        settings: RefreshSettings
+    ) async throws -> RefreshSettings {
+        var request = URLRequest(url: baseURL.appending(path: "/api/v1/groups/\(groupID)/refresh-settings"))
+        request.httpMethod = "PUT"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(settings)
+        return try await decode(request)
+    }
+
+    public func deleteGroupRefreshSettings(groupID: String) async throws -> RefreshSettings {
+        var request = URLRequest(url: baseURL.appending(path: "/api/v1/groups/\(groupID)/refresh-settings"))
+        request.httpMethod = "DELETE"
+        return try await decode(request)
+    }
+
     public func listPendingNotificationEvents(limit: Int = 50) async throws -> [NotificationEvent] {
         var components = URLComponents(
             url: baseURL.appending(path: "/api/v1/notifications/pending"),
@@ -492,6 +543,24 @@ public struct HTTPReaderService: ReaderService {
         request.httpBody = try JSONEncoder().encode(Payload(eventIDs: eventIDs))
         let response: Response = try await decode(request)
         return response.acknowledged
+    }
+
+    public func applySyncEvents(_ events: [SyncEvent]) async throws -> Int {
+        var request = URLRequest(url: baseURL.appending(path: "/api/v1/sync/events/apply"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        struct Payload: Codable {
+            let events: [SyncEvent]
+        }
+
+        struct Response: Codable {
+            let applied: Int
+        }
+
+        request.httpBody = try JSONEncoder().encode(Payload(events: events))
+        let response: Response = try await decode(request)
+        return response.applied
     }
 
     private func decode<T: Decodable>(_ request: URLRequest) async throws -> T {

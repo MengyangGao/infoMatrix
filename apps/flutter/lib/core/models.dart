@@ -394,6 +394,40 @@ class NotificationSettings {
   }
 }
 
+class RefreshSettings {
+  const RefreshSettings({
+    required this.enabled,
+    required this.intervalMinutes,
+  });
+
+  final bool enabled;
+  final int intervalMinutes;
+
+  RefreshSettings copyWith({
+    bool? enabled,
+    int? intervalMinutes,
+  }) {
+    return RefreshSettings(
+      enabled: enabled ?? this.enabled,
+      intervalMinutes: intervalMinutes ?? this.intervalMinutes,
+    );
+  }
+
+  factory RefreshSettings.fromJson(Map<String, dynamic> json) {
+    return RefreshSettings(
+      enabled: (json['enabled'] as bool?) ?? true,
+      intervalMinutes: (json['interval_minutes'] as num?)?.toInt() ?? 15,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'enabled': enabled,
+      'interval_minutes': intervalMinutes,
+    };
+  }
+}
+
 class GlobalNotificationSettings {
   const GlobalNotificationSettings({
     required this.backgroundRefreshEnabled,

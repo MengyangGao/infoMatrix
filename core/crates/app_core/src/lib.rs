@@ -51,10 +51,19 @@ impl InfoMatrixAppCore {
         let url = Url::parse(feed_url).map_err(|err| AppCoreError::InvalidUrl(err.to_string()))?;
         let request = FetchRequest { url: url.clone(), etag: None, last_modified: None };
 
-        if let Ok(FetchOutcome::Updated { response, parsed }) =
-            service.fetch_and_parse("direct_subscription", &request).await
-        {
-            if parsed.feed_type != FeedType::Unknown {
+        let outcome = service
+            .fetch_and_parse("direct_subscription", &request)
+            .await
+            .map_err(|err| AppCoreError::Fetch(err.to_string()))?;
+
+        match outcome {
+            FetchOutcome::Updated { response, parsed } => {
+                if parsed.feed_type == FeedType::Unknown {
+                    return Err(AppCoreError::Fetch(
+                        "direct feed URL did not resolve to a valid feed".to_owned(),
+                    ));
+                }
+
                 let feed_id = self.storage.upsert_feed(&NewFeed {
                     feed_url: response.final_url.clone(),
                     site_url: parsed.site_url.clone(),
@@ -78,17 +87,12 @@ impl InfoMatrixAppCore {
                     response.duration_ms,
                     None,
                 )?;
-                return Ok(feed_id);
+                Ok(feed_id)
             }
+            FetchOutcome::NotModified(_) => Err(AppCoreError::Fetch(
+                "direct feed URL did not return updated feed content".to_owned(),
+            )),
         }
-
-        let id = self.storage.upsert_feed(&NewFeed {
-            feed_url: url,
-            site_url: None,
-            title: None,
-            feed_type: FeedType::Unknown,
-        })?;
-        Ok(id)
     }
 
     /// Discover feeds from site URL.
@@ -347,7 +351,7 @@ mod tests {
     use storage::ItemListFilter;
     use storage::Storage;
 
-    use super::InfoMatrixAppCore;
+    use super::{AppCoreError, InfoMatrixAppCore};
 
     struct MockFetchClient {
         response: FetchResponse,
@@ -396,6 +400,37 @@ mod tests {
         assert_eq!(items.len(), 2);
         assert_eq!(items[0].title, "RSS Item Two");
         assert_eq!(items[1].title, "RSS Item One");
+    }
+
+    #[tokio::test]
+    async fn rejects_invalid_direct_feed_instead_of_creating_placeholder() {
+        let storage = Storage::open_in_memory().expect("open");
+        storage.migrate().expect("migrate");
+
+        let mut app = InfoMatrixAppCore::new(storage);
+        let response = FetchResponse {
+            final_url: url::Url::parse("https://example.com/feed.xml").expect("url parse"),
+            status: 200,
+            body: std::fs::read(
+                std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("../../../tests/feeds/malformed_feed.xml"),
+            )
+            .expect("fixture malformed feed"),
+            content_type: Some("application/xml".to_owned()),
+            etag: None,
+            last_modified: None,
+            duration_ms: 9,
+        };
+
+        let result = app
+            .add_subscription_by_feed_url(
+                &FetchService::new(MockFetchClient { response }),
+                "https://example.com/feed.xml",
+            )
+            .await;
+
+        assert!(matches!(result, Err(AppCoreError::Fetch(_))));
+        assert!(app.storage.list_feeds().expect("feeds").is_empty());
     }
 
     #[test]

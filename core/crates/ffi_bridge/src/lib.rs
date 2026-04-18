@@ -12,7 +12,7 @@ use fetcher::{
 };
 use models::{
     FeedType, GlobalNotificationSettings, ItemStatePatch, NewFeed, NotificationDeliveryState,
-    NotificationEvent, NotificationMode, NotificationSettings,
+    NotificationEvent, NotificationMode, NotificationSettings, RefreshSettings,
 };
 use notifications::{
     NotificationCandidate, NotificationDecision, build_digest_batch, canonical_identity_key,
@@ -24,7 +24,7 @@ use scraper::{Html, Selector};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use storage::{ItemListFilter, Storage};
+use storage::{ItemListFilter, Storage, SyncEventRecord};
 use url::Url;
 
 const DEFAULT_TIMEOUT_SECS: u64 = 20;
@@ -113,6 +113,32 @@ struct UpdateFeedNotificationSettingsInput {
 struct UpdateGlobalNotificationSettingsInput {
     db_path: Option<String>,
     settings: GlobalNotificationSettings,
+}
+
+#[derive(Debug, Deserialize)]
+struct RefreshSettingsInput {
+    db_path: Option<String>,
+    feed_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct UpdateFeedRefreshSettingsInput {
+    db_path: Option<String>,
+    feed_id: String,
+    settings: RefreshSettings,
+}
+
+#[derive(Debug, Deserialize)]
+struct GroupRefreshSettingsInput {
+    db_path: Option<String>,
+    group_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct UpdateGroupRefreshSettingsInput {
+    db_path: Option<String>,
+    group_id: String,
+    settings: RefreshSettings,
 }
 
 #[derive(Debug, Deserialize)]
@@ -323,6 +349,22 @@ struct AckSyncEventsInput {
     event_ids: Vec<String>,
 }
 
+#[derive(Debug, Deserialize)]
+struct SyncEventInput {
+    id: String,
+    entity_type: String,
+    entity_id: String,
+    event_type: String,
+    payload_json: String,
+    created_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct ApplySyncEventsInput {
+    db_path: Option<String>,
+    events: Vec<SyncEventInput>,
+}
+
 #[derive(Debug, Serialize)]
 struct MetaOutput {
     api_version: i32,
@@ -337,6 +379,11 @@ struct SyncEventOutput {
     event_type: String,
     payload_json: String,
     created_at: String,
+}
+
+#[derive(Debug, Serialize)]
+struct ApplySyncEventsOutput {
+    applied: usize,
 }
 
 /// Return core metadata and API version.
@@ -1540,6 +1587,142 @@ pub unsafe extern "C" fn infomatrix_core_update_feed_notification_settings_json(
     }
 }
 
+/// Return per-feed auto-refresh settings, falling back to the effective scope when absent.
+///
+/// # Safety
+/// `input` must be a valid, null-terminated C string pointer owned by the caller for the
+/// duration of this call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn infomatrix_core_get_feed_refresh_settings_json(
+    input: *const c_char,
+) -> *mut c_char {
+    match with_input::<RefreshSettingsInput, _>(input, |payload| {
+        let storage = open_storage(&payload.db_path)?;
+        storage.resolve_effective_refresh_settings(&payload.feed_id).map_err(|err| err.to_string())
+    }) {
+        Ok(ptr) => ptr,
+        Err(ptr) => ptr,
+    }
+}
+
+/// Update per-feed auto-refresh settings.
+///
+/// # Safety
+/// `input` must be a valid, null-terminated C string pointer owned by the caller for the
+/// duration of this call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn infomatrix_core_update_feed_refresh_settings_json(
+    input: *const c_char,
+) -> *mut c_char {
+    match with_input::<UpdateFeedRefreshSettingsInput, _>(input, |payload| {
+        let mut storage = open_storage(&payload.db_path)?;
+        storage
+            .upsert_feed_refresh_settings(&payload.feed_id, &payload.settings)
+            .map_err(|err| err.to_string())?;
+        storage.resolve_effective_refresh_settings(&payload.feed_id).map_err(|err| err.to_string())
+    }) {
+        Ok(ptr) => ptr,
+        Err(ptr) => ptr,
+    }
+}
+
+/// Clear explicit per-feed auto-refresh settings.
+///
+/// # Safety
+/// `input` must be a valid, null-terminated C string pointer owned by the caller for the
+/// duration of this call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn infomatrix_core_delete_feed_refresh_settings_json(
+    input: *const c_char,
+) -> *mut c_char {
+    match with_input::<RefreshSettingsInput, _>(input, |payload| {
+        let mut storage = open_storage(&payload.db_path)?;
+        storage.delete_feed_refresh_settings(&payload.feed_id).map_err(|err| err.to_string())?;
+        storage.resolve_effective_refresh_settings(&payload.feed_id).map_err(|err| err.to_string())
+    }) {
+        Ok(ptr) => ptr,
+        Err(ptr) => ptr,
+    }
+}
+
+/// Return per-group auto-refresh settings.
+///
+/// # Safety
+/// `input` must be a valid, null-terminated C string pointer owned by the caller for the
+/// duration of this call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn infomatrix_core_get_group_refresh_settings_json(
+    input: *const c_char,
+) -> *mut c_char {
+    match with_input::<GroupRefreshSettingsInput, _>(input, |payload| {
+        let storage = open_storage(&payload.db_path)?;
+        let globals = storage.get_global_notification_settings().map_err(|err| err.to_string())?;
+        Ok(storage
+            .get_group_refresh_settings(&payload.group_id)
+            .map_err(|err| err.to_string())?
+            .map(|row| row.settings)
+            .unwrap_or_else(|| RefreshSettings {
+                enabled: globals.background_refresh_enabled,
+                interval_minutes: globals.background_refresh_interval_minutes.max(1),
+            }))
+    }) {
+        Ok(ptr) => ptr,
+        Err(ptr) => ptr,
+    }
+}
+
+/// Update per-group auto-refresh settings.
+///
+/// # Safety
+/// `input` must be a valid, null-terminated C string pointer owned by the caller for the
+/// duration of this call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn infomatrix_core_update_group_refresh_settings_json(
+    input: *const c_char,
+) -> *mut c_char {
+    match with_input::<UpdateGroupRefreshSettingsInput, _>(input, |payload| {
+        let mut storage = open_storage(&payload.db_path)?;
+        storage
+            .upsert_group_refresh_settings(&payload.group_id, &payload.settings)
+            .map_err(|err| err.to_string())?;
+        storage
+            .get_group_refresh_settings(&payload.group_id)
+            .map_err(|err| err.to_string())?
+            .map(|row| row.settings)
+            .ok_or_else(|| "group refresh settings not found after update".to_owned())
+    }) {
+        Ok(ptr) => ptr,
+        Err(ptr) => ptr,
+    }
+}
+
+/// Clear explicit per-group auto-refresh settings.
+///
+/// # Safety
+/// `input` must be a valid, null-terminated C string pointer owned by the caller for the
+/// duration of this call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn infomatrix_core_delete_group_refresh_settings_json(
+    input: *const c_char,
+) -> *mut c_char {
+    match with_input::<GroupRefreshSettingsInput, _>(input, |payload| {
+        let mut storage = open_storage(&payload.db_path)?;
+        storage.delete_group_refresh_settings(&payload.group_id).map_err(|err| err.to_string())?;
+        let globals = storage.get_global_notification_settings().map_err(|err| err.to_string())?;
+        Ok(storage
+            .get_group_refresh_settings(&payload.group_id)
+            .map_err(|err| err.to_string())?
+            .map(|row| row.settings)
+            .unwrap_or_else(|| RefreshSettings {
+                enabled: globals.background_refresh_enabled,
+                interval_minutes: globals.background_refresh_interval_minutes.max(1),
+            }))
+    }) {
+        Ok(ptr) => ptr,
+        Err(ptr) => ptr,
+    }
+}
+
 /// List notification events waiting for delivery.
 ///
 /// # Safety
@@ -1637,6 +1820,37 @@ pub unsafe extern "C" fn infomatrix_core_ack_sync_events_json(input: *const c_ch
         let acknowledged =
             storage.acknowledge_sync_events(&payload.event_ids).map_err(|err| err.to_string())?;
         Ok(Output { acknowledged })
+    }) {
+        Ok(ptr) => ptr,
+        Err(ptr) => ptr,
+    }
+}
+
+/// Apply remote sync events.
+///
+/// # Safety
+/// `input` must be a valid, null-terminated C string pointer owned by the caller for the
+/// duration of this call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn infomatrix_core_apply_sync_events_json(
+    input: *const c_char,
+) -> *mut c_char {
+    match with_input::<ApplySyncEventsInput, _>(input, |payload| {
+        let mut storage = open_storage(&payload.db_path)?;
+        let events = payload
+            .events
+            .into_iter()
+            .map(|event| SyncEventRecord {
+                id: event.id,
+                entity_type: event.entity_type,
+                entity_id: event.entity_id,
+                event_type: event.event_type,
+                payload_json: event.payload_json,
+                created_at: event.created_at,
+            })
+            .collect::<Vec<_>>();
+        let applied = storage.apply_sync_events(&events).map_err(|err| err.to_string())?;
+        Ok(ApplySyncEventsOutput { applied })
     }) {
         Ok(ptr) => ptr,
         Err(ptr) => ptr,
@@ -2578,7 +2792,7 @@ mod tests {
         let add_envelope = decode_envelope(add_output);
         let feed_id = add_envelope["data"]["feed_id"].as_str().expect("feed id");
 
-        let mut storage =
+        let storage =
             open_storage(&Some(temp.path().to_string_lossy().to_string())).expect("open storage");
         storage
             .set_feed_next_scheduled_fetch_at(feed_id, Some("2000-01-01T00:00:00Z"))

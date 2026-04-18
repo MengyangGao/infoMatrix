@@ -17,7 +17,7 @@ use icon::extract_icon_candidates;
 use models::{
     EntryKind, EntrySource, EntrySourceKind, FeedHealthState, FeedType, GlobalNotificationSettings,
     ItemScopeCounts, ItemStatePatch, NewEntry, NewFeed, NormalizedItem, NotificationDeliveryState,
-    NotificationDigest, NotificationEvent, NotificationMode, NotificationSettings,
+    NotificationDigest, NotificationEvent, NotificationMode, NotificationSettings, RefreshSettings,
 };
 use notifications::{
     NotificationCandidate, NotificationDecision, RefreshAttempt, RefreshReason, build_digest_batch,
@@ -30,7 +30,7 @@ use reqwest::Client;
 use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use storage::{ItemListFilter, Storage, StorageError};
+use storage::{ItemListFilter, Storage, StorageError, SyncEventRecord};
 use tokio::task::JoinSet;
 use tracing::{info, warn};
 use url::Url;
@@ -334,6 +334,26 @@ struct AckSyncEventsResponse {
 }
 
 #[derive(Debug, Deserialize)]
+struct SyncEventInput {
+    id: String,
+    entity_type: String,
+    entity_id: String,
+    event_type: String,
+    payload_json: String,
+    created_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct ApplySyncEventsRequest {
+    events: Vec<SyncEventInput>,
+}
+
+#[derive(Debug, Serialize)]
+struct ApplySyncEventsResponse {
+    applied: usize,
+}
+
+#[derive(Debug, Deserialize)]
 struct OpmlImportRequest {
     opml_xml: String,
 }
@@ -464,6 +484,18 @@ fn app_router(context: AppContext) -> Router {
             get(get_feed_notification_settings).put(update_feed_notification_settings),
         )
         .route(
+            "/api/v1/feeds/{feed_id}/refresh-settings",
+            get(get_feed_refresh_settings)
+                .put(update_feed_refresh_settings)
+                .delete(delete_feed_refresh_settings),
+        )
+        .route(
+            "/api/v1/groups/{group_id}/refresh-settings",
+            get(get_group_refresh_settings)
+                .put(update_group_refresh_settings)
+                .delete(delete_group_refresh_settings),
+        )
+        .route(
             "/api/v1/notifications/settings",
             get(get_global_notification_settings).put(update_global_notification_settings),
         )
@@ -473,6 +505,7 @@ fn app_router(context: AppContext) -> Router {
         .route("/api/v1/entries/{item_id}/state", patch(patch_item_state))
         .route("/api/v1/sync/events", get(list_sync_events))
         .route("/api/v1/sync/events/ack", post(ack_sync_events))
+        .route("/api/v1/sync/events/apply", post(apply_sync_events))
         .route("/api/v1/opml/export", get(export_opml_subscriptions))
         .route("/api/v1/opml/import", post(import_opml_subscriptions))
         .with_state(context)
@@ -1162,6 +1195,76 @@ async fn update_feed_notification_settings(
     Ok(Json(row.settings))
 }
 
+async fn get_feed_refresh_settings(
+    State(context): State<AppContext>,
+    AxumPath(feed_id): AxumPath<String>,
+) -> Result<Json<RefreshSettings>, ApiError> {
+    let storage = open_storage(&context)?;
+    Ok(Json(storage.resolve_effective_refresh_settings(&feed_id)?))
+}
+
+async fn update_feed_refresh_settings(
+    State(context): State<AppContext>,
+    AxumPath(feed_id): AxumPath<String>,
+    Json(payload): Json<RefreshSettings>,
+) -> Result<Json<RefreshSettings>, ApiError> {
+    let mut storage = open_storage(&context)?;
+    let row = storage.upsert_feed_refresh_settings(&feed_id, &payload)?;
+    Ok(Json(row.settings))
+}
+
+async fn delete_feed_refresh_settings(
+    State(context): State<AppContext>,
+    AxumPath(feed_id): AxumPath<String>,
+) -> Result<Json<RefreshSettings>, ApiError> {
+    let mut storage = open_storage(&context)?;
+    storage.delete_feed_refresh_settings(&feed_id)?;
+    Ok(Json(storage.resolve_effective_refresh_settings(&feed_id)?))
+}
+
+async fn get_group_refresh_settings(
+    State(context): State<AppContext>,
+    AxumPath(group_id): AxumPath<String>,
+) -> Result<Json<RefreshSettings>, ApiError> {
+    let storage = open_storage(&context)?;
+    let globals = storage.get_global_notification_settings()?;
+    let settings = storage
+        .get_group_refresh_settings(&group_id)?
+        .map(|row| row.settings)
+        .unwrap_or_else(|| RefreshSettings {
+            enabled: globals.background_refresh_enabled,
+            interval_minutes: globals.background_refresh_interval_minutes.max(1),
+        });
+    Ok(Json(settings))
+}
+
+async fn update_group_refresh_settings(
+    State(context): State<AppContext>,
+    AxumPath(group_id): AxumPath<String>,
+    Json(payload): Json<RefreshSettings>,
+) -> Result<Json<RefreshSettings>, ApiError> {
+    let mut storage = open_storage(&context)?;
+    let row = storage.upsert_group_refresh_settings(&group_id, &payload)?;
+    Ok(Json(row.settings))
+}
+
+async fn delete_group_refresh_settings(
+    State(context): State<AppContext>,
+    AxumPath(group_id): AxumPath<String>,
+) -> Result<Json<RefreshSettings>, ApiError> {
+    let mut storage = open_storage(&context)?;
+    storage.delete_group_refresh_settings(&group_id)?;
+    let globals = storage.get_global_notification_settings()?;
+    let settings = storage
+        .get_group_refresh_settings(&group_id)?
+        .map(|row| row.settings)
+        .unwrap_or_else(|| RefreshSettings {
+            enabled: globals.background_refresh_enabled,
+            interval_minutes: globals.background_refresh_interval_minutes.max(1),
+        });
+    Ok(Json(settings))
+}
+
 async fn list_pending_notification_events(
     State(context): State<AppContext>,
     Query(query): Query<ListNotificationEventsQuery>,
@@ -1238,6 +1341,27 @@ async fn ack_sync_events(
     let storage = open_storage(&context)?;
     let acknowledged = storage.acknowledge_sync_events(&payload.event_ids)?;
     Ok(Json(AckSyncEventsResponse { acknowledged }))
+}
+
+async fn apply_sync_events(
+    State(context): State<AppContext>,
+    Json(payload): Json<ApplySyncEventsRequest>,
+) -> Result<Json<ApplySyncEventsResponse>, ApiError> {
+    let mut storage = open_storage(&context)?;
+    let events = payload
+        .events
+        .into_iter()
+        .map(|event| SyncEventRecord {
+            id: event.id,
+            entity_type: event.entity_type,
+            entity_id: event.entity_id,
+            event_type: event.event_type,
+            payload_json: event.payload_json,
+            created_at: event.created_at,
+        })
+        .collect::<Vec<_>>();
+    let applied = storage.apply_sync_events(&events)?;
+    Ok(Json(ApplySyncEventsResponse { applied }))
 }
 
 async fn refresh_due_feeds_once(
@@ -3106,7 +3230,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let db = dir.path().join("infomatrix.db");
 
-        let mut storage = Storage::open(db.to_string_lossy().as_ref()).expect("open storage");
+        let storage = Storage::open(db.to_string_lossy().as_ref()).expect("open storage");
         storage.migrate().expect("migrate");
         let feed_id = storage
             .upsert_feed(&NewFeed {
@@ -3691,15 +3815,19 @@ mod tests {
         assert_eq!(list_response.status(), StatusCode::OK);
         let list_body = list_response.into_body().collect().await.expect("body bytes").to_bytes();
         let events: serde_json::Value = serde_json::from_slice(&list_body).expect("events json");
-        let event_id = events
-            .get(0)
-            .and_then(|event| event.get("id"))
-            .and_then(|id| id.as_str())
-            .expect("event id")
-            .to_owned();
-        assert_eq!(events[0]["entity_type"], "item_state");
-        assert_eq!(events[0]["entity_id"], "item-1");
-        assert_eq!(events[0]["event_type"], "updated");
+        let item_state_event = events
+            .as_array()
+            .and_then(|items| {
+                items.iter().find(|event| {
+                    event.get("entity_type").and_then(|value| value.as_str()) == Some("item_state")
+                        && event.get("entity_id").and_then(|value| value.as_str()) == Some("item-1")
+                        && event.get("event_type").and_then(|value| value.as_str())
+                            == Some("updated")
+                })
+            })
+            .expect("item state event");
+        let event_id =
+            item_state_event.get("id").and_then(|id| id.as_str()).expect("event id").to_owned();
 
         let ack_response = app
             .clone()
@@ -3733,7 +3861,15 @@ mod tests {
             list_after_ack.into_body().collect().await.expect("body bytes").to_bytes();
         let events_after_ack: serde_json::Value =
             serde_json::from_slice(&list_after_ack_body).expect("events json");
-        assert_eq!(events_after_ack, json!([]));
+        assert!(
+            events_after_ack
+                .as_array()
+                .expect("events array")
+                .iter()
+                .all(|event| event.get("entity_type").and_then(|value| value.as_str())
+                    != Some("item_state")),
+            "item_state event should have been acknowledged"
+        );
     }
 
     #[tokio::test]
