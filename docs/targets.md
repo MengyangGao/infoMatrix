@@ -24,8 +24,8 @@ The release pipeline should keep the public download story simple and platform-s
 - Windows users install `InfoMatrix-windows-x64.msix`.
 - Linux users install `InfoMatrix-linux-x64.deb`.
 - Android users install `InfoMatrix-android.apk` or use `InfoMatrix-android.aab` for store distribution.
-- iOS simulator users can use `InfoMatrix-iOS-simulator.zip`; device builds remain signing-dependent.
 - macOS users can also install `infomatrix` through the project-owned Homebrew cask.
+- iOS remains an App Store/TestFlight track rather than a GitHub Releases download target.
 
 ## Guardrails
 
