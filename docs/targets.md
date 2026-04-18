@@ -24,7 +24,7 @@ The release pipeline should keep the public download story simple and platform-s
 - Windows users install `InfoMatrix-windows-x64.msix`.
 - Linux users install `InfoMatrix-linux-x64.deb`.
 - Android remains available through manual smoke builds and Play Console preparation, but is not part of the current tagged GitHub Release download set.
-- iOS simulator users can use `InfoMatrix-iOS-simulator.zip`; device builds remain signing-dependent.
+- iOS simulator users can use `InfoMatrix-iOS-simulator.zip`; device builds remain signing-dependent and are not part of the current tagged GitHub Release download set.
 - macOS users can also install `infomatrix` through the project-owned Homebrew cask.
 
 ## Guardrails

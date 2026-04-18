@@ -43,7 +43,7 @@ Recommended packages by platform:
 - Linux: `InfoMatrix-linux-x64.deb`
 - iOS simulator: `InfoMatrix-iOS-simulator.zip`
 
-Android packaging remains available for manual smoke builds and store preparation, but it is not published as part of tagged GitHub Releases. When signing assets are available, the release workflow also publishes installable Apple device artifacts. The release page includes the checksum files for every published platform bundle.
+Android packaging remains available for manual smoke builds and store preparation, but it is not published as part of tagged GitHub Releases. Tagged releases publish macOS, Windows, Linux, and iOS simulator bundles; Apple device `.ipa` output stays in the signing-dependent workflow path for later TestFlight or App Store Connect preparation. The release page includes the checksum files for every published platform bundle.
 
 ## What You Can Do
 

@@ -9,12 +9,11 @@ Ship InfoMatrix as a stable local-first reader with matched Apple and Flutter be
 - macOS users can also install the app through the project-owned Homebrew cask tap:
   - `brew tap MengyangGao/infomatrix https://github.com/MengyangGao/infoMatrix`
   - `brew install --cask infomatrix`
-- The release workflow publishes installable bundles for macOS, iOS, Windows, and Linux.
+- The release workflow publishes installable bundles for macOS, iOS simulator, Windows, and Linux.
 - Android packaging remains available for manual smoke builds and store preparation, but it is not published as part of tagged GitHub Releases.
 - Artifact names are intentionally stable so users can learn one download path per platform:
   - macOS: `InfoMatrix-macos.dmg`, `InfoMatrix-macos.zip`
   - iOS simulator: `InfoMatrix-iOS-simulator.zip`
-  - iOS device: `InfoMatrix-iOS.ipa` when signing inputs are present
   - Windows: `InfoMatrix-windows-x64.msix`, `InfoMatrix-windows-x64.zip`
   - Linux: `InfoMatrix-linux-x64.deb`
 - Checksum files are published next to each platform bundle so downloads can be verified before installation.
@@ -38,11 +37,11 @@ Ship InfoMatrix as a stable local-first reader with matched Apple and Flutter be
   - `dist/releases/macos/InfoMatrix-macos.dmg`
   - `dist/releases/macos/InfoMatrix-macos.zip`
 - If `INFOMATRIX_MACOS_SIGNING_IDENTITY` is set, the app bundle is signed with that identity; if `INFOMATRIX_MACOS_NOTARIZE=1` is also set, the script requires either `INFOMATRIX_MACOS_NOTARY_PROFILE` or the Apple ID/password/team variables and staples the notarization ticket before packaging.
-- GitHub Actions can import Apple signing assets from the secrets `INFOMATRIX_APPLE_CERTS_P12_B64`, `INFOMATRIX_APPLE_CERTS_PASSWORD`, `INFOMATRIX_APPLE_KEYCHAIN_PASSWORD`, and `INFOMATRIX_IOS_PROVISIONING_PROFILE_B64` when you want signed macOS or iOS device release artifacts.
+- GitHub Actions can import Apple signing assets from the secrets `INFOMATRIX_APPLE_CERTS_P12_B64`, `INFOMATRIX_APPLE_CERTS_PASSWORD`, `INFOMATRIX_APPLE_KEYCHAIN_PASSWORD`, and `INFOMATRIX_IOS_PROVISIONING_PROFILE_B64` when you want signed macOS or iOS device release artifacts in manual or future signing-dependent workflows.
 - The iOS packaging script emits a simulator app bundle for local testing:
   - `dist/InfoMatrix-iOS.app`
   - `dist/releases/ios/InfoMatrix-iOS-simulator.zip`
-- If `INFOMATRIX_IOS_DEVICE_RELEASE=1` is set together with `INFOMATRIX_IOS_TEAM_ID` and `INFOMATRIX_IOS_EXPORT_METHOD`, the script also emits:
+- If `INFOMATRIX_IOS_DEVICE_RELEASE=1` is set together with `INFOMATRIX_IOS_TEAM_ID` and `INFOMATRIX_IOS_EXPORT_METHOD`, the script also emits a device archive for signing-dependent workflows:
   - `dist/releases/ios/InfoMatrix-iOS.xcarchive`
   - `dist/releases/ios/InfoMatrix-iOS.ipa`
   If you need a custom export profile, provide `INFOMATRIX_IOS_EXPORT_OPTIONS_PLIST` and the script will use it instead of generating a minimal plist.
@@ -95,7 +94,7 @@ Set `INFOMATRIX_MACOS_SIGNING_IDENTITY` and `INFOMATRIX_MACOS_NOTARIZE=1` to pro
 tooling/scripts/package_ios_release.sh
 ```
 The script leaves `dist/InfoMatrix-iOS.app` in place and zips the same bundle under `dist/releases/ios/InfoMatrix-iOS-simulator.zip`. Use it for simulator smoke checks, not device installation.
-Set `INFOMATRIX_IOS_DEVICE_RELEASE=1` together with `INFOMATRIX_IOS_TEAM_ID` and `INFOMATRIX_IOS_EXPORT_METHOD` to also build a device archive and export an IPA for TestFlight or App Store Connect.
+Set `INFOMATRIX_IOS_DEVICE_RELEASE=1` together with `INFOMATRIX_IOS_TEAM_ID` and `INFOMATRIX_IOS_EXPORT_METHOD` if you are running a signing-dependent device workflow outside the public tagged release path.
 
 ### Windows
 ```bash

@@ -410,7 +410,6 @@ jobs:
             dist/releases/macos/*.dmg
             dist/releases/macos/*.zip
             dist/releases/macos/*.SHA256SUMS
-            dist/releases/ios/*.ipa
             dist/releases/ios/*.zip
             dist/releases/ios/*.SHA256SUMS
             dist/releases/windows/*.msix

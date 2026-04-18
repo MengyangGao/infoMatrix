@@ -1,46 +1,43 @@
 # Objective
-Fix the macOS app crash that occurs after bypassing Gatekeeper, caused by CloudKit startup initialization. The app should launch reliably even when iCloud sync is unavailable, disabled, or the app is running without a fully provisioned CloudKit release setup.
+Make tagged GitHub Releases publish successfully again by removing the hard dependency on an iOS `.ipa` that this release pipeline does not produce in the current smoke-release mode.
 
 # User Value
-Users can open the downloaded macOS build instead of seeing an immediate crash after choosing "Open Anyway". Apple sync remains optional and local-first behavior is preserved.
+Users can download the macOS release build from GitHub Releases without the publish job failing on a missing iOS device artifact. The release workflow stays aligned with the actual artifacts the build produces.
 
 # Constraints
-- Keep the fix narrowly scoped to startup and CloudKit initialization.
-- Do not require CloudKit to be available at process launch.
-- Preserve optional Apple sync behavior for macOS/iOS/iPadOS/visionOS.
-- Avoid regressing the existing release workflow more than necessary.
-- Add or update tests for the startup path.
+- Keep the fix narrow and release-focused.
+- Do not reintroduce Android into tagged releases.
+- Preserve the current smoke/public release behavior for Apple and desktop platforms.
+- Keep release documentation truthful about what tagged releases contain.
+- Add or update checks so future publish mismatches are caught early.
 
 # Assumptions
-- [ASSUMPTION] The crash is triggered by eager CloudKit initialization during app startup, not by later user interaction.
-- [ASSUMPTION] CloudKit sync should be lazy and best-effort, with startup falling back to local-only mode when CloudKit cannot be initialized.
-- [ASSUMPTION] The current release is still intended to ship with optional Apple sync, but the app must never fail to launch just because CloudKit is unavailable.
+- [ASSUMPTION] The current tagged release path is intended to publish macOS, Windows, Linux, and iOS simulator artifacts, not a device `.ipa`.
+- [ASSUMPTION] The missing `.ipa` is a packaging-asset mismatch, not a build break in the iOS job itself.
+- [ASSUMPTION] Android remains intentionally excluded from tagged releases for now.
 
 # Affected Files
-- apps/apple/Shared/CloudKitSyncManager.swift
-- apps/apple/Shared/InfoMatrixApp.swift
-- apps/apple/macOS/XcodeApp/MacApp.swift
-- apps/apple/iOS/XcodeApp/iOSApp.swift
-- apps/apple/iPadOS/XcodeApp/iPadApp.swift
-- apps/apple/visionOS/XcodeApp/VisionApp.swift
-- apps/apple/Tests/InfoMatrixShellTests/*
+- .github/workflows/release.yml
+- README.md
+- docs/release.md
+- docs/targets.md
+- plan.md
 
 # Steps
-1. Inspect the CloudKit coordinator initialization path and make it lazy or failure-tolerant.
-2. Stop constructing or touching CloudKit state during app startup unless the user actually enables sync or the app explicitly refreshes sync status.
-3. Add a fallback state for CloudKit initialization failures so the UI can still show local-only operation.
-4. Add regression tests that verify app state can initialize without CloudKit and that sync remains optional.
-5. Rebuild and run the Apple test suite plus the release gate.
+1. Update the release workflow so the publish step no longer requires an iOS `.ipa` pattern that is not produced.
+2. Align the public release docs and README with the actual iOS asset set.
+3. Re-run local validation on the workflow YAML and surrounding docs.
+4. Confirm the workflow change is minimal and does not re-enable Android publishing.
 
 # Validation
-- `swift test --disable-sandbox`
-- `tooling/scripts/release_check.sh`
-- If possible, smoke-run the macOS app bundle or at least verify the crash logs no longer show startup termination from `CloudKitSyncCoordinator.init`.
+- `bash -n` or YAML parse check for `.github/workflows/release.yml`
+- `git diff --check`
+- Search/spot-check release docs for iOS asset consistency
 
 # Risks
-- CloudKit may still be unavailable on some machines even after lazy init; the fallback must prevent that from surfacing as a crash.
-- Changing startup behavior may alter when sync status appears in the UI, so the UI must tolerate `nil` or disabled sync state.
-- If the issue is actually an entitlement/signing problem, lazy init will fix the crash symptom but not the eventual sync feature availability.
+- If the iOS job later starts producing `.ipa` again, the release docs may under-describe the available asset unless updated.
+- Removing the `.ipa` from publication may surprise anyone expecting device installs from the GitHub Release page.
+- The workflow could still fail later for unrelated asset mismatches if other patterns drift.
 
 # Rollback Notes
-- If the lazy CloudKit path introduces regressions, revert only the coordinator startup changes and keep the crash report evidence for the next iteration.
+- If the change breaks release publication expectations, restore the `.ipa` pattern and update the iOS packaging script/workflow together instead of partially reverting only one side.
