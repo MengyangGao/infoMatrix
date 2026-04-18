@@ -474,6 +474,44 @@ private actor MockReaderService: ReaderService {
     }
 }
 
+private actor MockCloudKitSyncTransport: CloudKitSyncTransport {
+    private(set) var accountStatusCallCount = 0
+    private(set) var uploadCallCount = 0
+    private(set) var fetchCallCount = 0
+
+    func accountStatus() async throws -> CloudKitSyncAccountState {
+        accountStatusCallCount += 1
+        return .available
+    }
+
+    func upload(events: [SyncEvent]) async throws {
+        uploadCallCount += events.count
+    }
+
+    func fetchRemoteEvents(after date: Date?) async throws -> [SyncEvent] {
+        fetchCallCount += 1
+        return []
+    }
+
+    func accountStatusCalls() async -> Int {
+        accountStatusCallCount
+    }
+}
+
+private final class CloudKitFactoryRecorder: @unchecked Sendable {
+    private(set) var callCount = 0
+    let transport: MockCloudKitSyncTransport
+
+    init(transport: MockCloudKitSyncTransport) {
+        self.transport = transport
+    }
+
+    func makeTransport() -> MockCloudKitSyncTransport {
+        callCount += 1
+        return transport
+    }
+}
+
 @MainActor
 final class AppStateTests: XCTestCase {
     func testNativeReaderServiceResolvesDefaultDatabasePath() {
@@ -599,6 +637,40 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(state.feeds.count, 1)
         XCTAssertEqual(state.items.count, 1)
         XCTAssertFalse(state.feeds.isEmpty)
+    }
+
+    func testCloudKitCoordinatorDoesNotTouchTransportUntilEnabled() async {
+        let service = MockReaderService()
+        let transport = MockCloudKitSyncTransport()
+        let recorder = CloudKitFactoryRecorder(transport: transport)
+        let defaultsSuiteName = "InfoMatrixShellTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: defaultsSuiteName)!
+        defer {
+            defaults.removePersistentDomain(forName: defaultsSuiteName)
+        }
+
+        let coordinator = CloudKitSyncCoordinator(
+            service: service,
+            transportFactory: {
+                recorder.makeTransport()
+            },
+            defaults: defaults,
+            lastSyncKey: "cloudkit.last_sync",
+            enabledKey: "cloudkit.enabled"
+        )
+
+        XCTAssertEqual(recorder.callCount, 0)
+
+        await coordinator.refreshStatus()
+        XCTAssertEqual(recorder.callCount, 0)
+        let initialAccountStatusCalls = await transport.accountStatusCalls()
+        XCTAssertEqual(initialAccountStatusCalls, 0)
+
+        coordinator.setEnabled(true)
+        await coordinator.refreshStatus()
+        XCTAssertEqual(recorder.callCount, 1)
+        let accountStatusCalls = await transport.accountStatusCalls()
+        XCTAssertEqual(accountStatusCalls, 1)
     }
 
     func testLiveAppleSubscriptionSmokeForKnownFeeds() async throws {

@@ -48,26 +48,24 @@ public final class CloudKitSyncCoordinator: ObservableObject, @unchecked Sendabl
     @Published public private(set) var status: CloudKitSyncStatus
 
     private let service: ReaderService
-    private let transport: any CloudKitSyncTransport
+    private let transportFactory: @Sendable () -> any CloudKitSyncTransport
+    private var transport: (any CloudKitSyncTransport)?
     private let defaults: UserDefaults
     private let lastSyncKey: String
     private let enabledKey: String
-    private let dateFormatter: ISO8601DateFormatter
 
     public init(
         service: ReaderService,
-        transport: CloudKitSyncTransport? = nil,
+        transportFactory: @escaping @Sendable () -> any CloudKitSyncTransport = { LiveCloudKitSyncTransport() },
         defaults: UserDefaults = .standard,
         lastSyncKey: String = "infomatrix.cloudkit.last_sync_at",
         enabledKey: String = "infomatrix.cloudkit.enabled"
     ) {
         self.service = service
-        self.transport = transport ?? LiveCloudKitSyncTransport()
+        self.transportFactory = transportFactory
         self.defaults = defaults
         self.lastSyncKey = lastSyncKey
         self.enabledKey = enabledKey
-        self.dateFormatter = ISO8601DateFormatter()
-        self.dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         self.status = CloudKitSyncStatus(
             enabled: defaults.object(forKey: enabledKey) as? Bool ?? false,
             accountState: .couldNotDetermine,
@@ -87,7 +85,12 @@ public final class CloudKitSyncCoordinator: ObservableObject, @unchecked Sendabl
         let pendingCount = ((try? await service.listPendingSyncEvents(limit: 500))?.count) ?? 0
         let accountState: CloudKitSyncAccountState
         if status.enabled {
-            accountState = (try? await transport.accountStatus()) ?? .couldNotDetermine
+            do {
+                accountState = try await makeTransport().accountStatus()
+            } catch {
+                accountState = .couldNotDetermine
+                status.lastErrorMessage = error.localizedDescription
+            }
         } else {
             accountState = .couldNotDetermine
         }
@@ -105,13 +108,20 @@ public final class CloudKitSyncCoordinator: ObservableObject, @unchecked Sendabl
         defer { status.isSyncing = false }
 
         do {
+            let accountState = try await makeTransport().accountStatus()
+            status.accountState = accountState
+            guard accountState == .available else {
+                status.lastErrorMessage = "CloudKit account is not available"
+                return
+            }
+
             let pending = try await service.listPendingSyncEvents(limit: 500)
             if !pending.isEmpty {
-                try await transport.upload(events: pending)
+                try await makeTransport().upload(events: pending)
                 _ = try await service.acknowledgeSyncEvents(eventIDs: pending.map(\.id))
             }
 
-            let remoteEvents = try await transport.fetchRemoteEvents(after: status.lastSyncAt)
+            let remoteEvents = try await makeTransport().fetchRemoteEvents(after: status.lastSyncAt)
             if !remoteEvents.isEmpty {
                 _ = try await service.applySyncEvents(remoteEvents)
                 if let newest = remoteEvents.compactMap({ Self.decodeDate($0.createdAt) }).max() {
@@ -125,7 +135,6 @@ public final class CloudKitSyncCoordinator: ObservableObject, @unchecked Sendabl
             }
 
             status.pendingLocalEventCount = ((try? await service.listPendingSyncEvents(limit: 500))?.count) ?? 0
-            status.accountState = status.enabled ? (try? await transport.accountStatus()) ?? .couldNotDetermine : .couldNotDetermine
             status.lastErrorMessage = nil
         } catch {
             status.lastErrorMessage = error.localizedDescription
@@ -142,18 +151,26 @@ public final class CloudKitSyncCoordinator: ObservableObject, @unchecked Sendabl
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter.date(from: value) ?? ISO8601DateFormatter().date(from: value)
     }
+
+    private func makeTransport() -> any CloudKitSyncTransport {
+        if let transport {
+            return transport
+        }
+
+        let createdTransport = transportFactory()
+        transport = createdTransport
+        return createdTransport
+    }
 }
 
 #if canImport(CloudKit)
 public final class LiveCloudKitSyncTransport: CloudKitSyncTransport, @unchecked Sendable {
     private let container: CKContainer
-    private let database: CKDatabase
     private let recordType = "InfoMatrixSyncEvent"
     private let createdAtKey = "created_at"
 
     public init(container: CKContainer = .default()) {
         self.container = container
-        self.database = container.privateCloudDatabase
     }
 
     public func accountStatus() async throws -> CloudKitSyncAccountState {
@@ -184,7 +201,7 @@ public final class LiveCloudKitSyncTransport: CloudKitSyncTransport, @unchecked 
             record[createdAtKey] = ISO8601DateFormatter().date(from: event.createdAt) as CKRecordValue?
             return record
         }
-        _ = try await database.modifyRecords(saving: records, deleting: [])
+        _ = try await container.privateCloudDatabase.modifyRecords(saving: records, deleting: [])
     }
 
     public func fetchRemoteEvents(after date: Date?) async throws -> [SyncEvent] {
@@ -195,7 +212,7 @@ public final class LiveCloudKitSyncTransport: CloudKitSyncTransport, @unchecked 
             predicate = NSPredicate(value: true)
         }
         let query = CKQuery(recordType: recordType, predicate: predicate)
-        let result = try await database.records(matching: query)
+        let result = try await container.privateCloudDatabase.records(matching: query)
         let dateFormatter = ISO8601DateFormatter()
         dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
 

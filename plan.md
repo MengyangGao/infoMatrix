@@ -1,70 +1,46 @@
-# Phase 4: Distribution, Refresh Rules, and Stability Hardening
+# Objective
+Fix the macOS app crash that occurs after bypassing Gatekeeper, caused by CloudKit startup initialization. The app should launch reliably even when iCloud sync is unavailable, disabled, or the app is running without a fully provisioned CloudKit release setup.
 
-## Objective
-Deliver the next product slice that matters to users: reliable install paths for macOS/Windows/Linux/Android, a macOS Homebrew installation path, configurable auto-refresh rules with global/folder/feed inheritance, and tighter crash-resistant behavior on the main app flows.
+# User Value
+Users can open the downloaded macOS build instead of seeing an immediate crash after choosing "Open Anyway". Apple sync remains optional and local-first behavior is preserved.
 
-## User Value
-- Users can install InfoMatrix on macOS, Windows, Linux, and Android without building from source.
-- Mac users can optionally install through Homebrew in addition to release downloads.
-- Auto-refresh becomes controllable at the right scope instead of being a single global toggle.
-- The app becomes safer to use because main mutation and refresh flows surface errors instead of crashing.
+# Constraints
+- Keep the fix narrowly scoped to startup and CloudKit initialization.
+- Do not require CloudKit to be available at process launch.
+- Preserve optional Apple sync behavior for macOS/iOS/iPadOS/visionOS.
+- Avoid regressing the existing release workflow more than necessary.
+- Add or update tests for the startup path.
 
-## Constraints
-- Keep SQLite as the source of truth.
-- Preserve existing release artifact generation where possible.
-- Do not introduce AI/LLM work in this phase.
-- Keep Android, Linux, and Windows local-only; Apple sync remains separate.
-- Keep changes deterministic and testable.
-- Do not couple networking directly to view code.
+# Assumptions
+- [ASSUMPTION] The crash is triggered by eager CloudKit initialization during app startup, not by later user interaction.
+- [ASSUMPTION] CloudKit sync should be lazy and best-effort, with startup falling back to local-only mode when CloudKit cannot be initialized.
+- [ASSUMPTION] The current release is still intended to ship with optional Apple sync, but the app must never fail to launch just because CloudKit is unavailable.
 
-## Assumptions
-- [ASSUMPTION] Homebrew distribution will use a project-owned tap with cask/formula metadata checked into this repo.
-- [ASSUMPTION] Auto-refresh rules should inherit as `feed override > folder override > global default`.
-- [ASSUMPTION] Existing global background refresh settings remain as the default layer, with new per-group and per-feed overrides added alongside them.
-- [ASSUMPTION] "Memos" continue to use the existing note/memo entry model.
-- [ASSUMPTION] App Store readiness stays mostly documentation/signing prep in this pass; full submission is later.
+# Affected Files
+- apps/apple/Shared/CloudKitSyncManager.swift
+- apps/apple/Shared/InfoMatrixApp.swift
+- apps/apple/macOS/XcodeApp/MacApp.swift
+- apps/apple/iOS/XcodeApp/iOSApp.swift
+- apps/apple/iPadOS/XcodeApp/iPadApp.swift
+- apps/apple/visionOS/XcodeApp/VisionApp.swift
+- apps/apple/Tests/InfoMatrixShellTests/*
 
-## Overlooked Risks
-1. A naive refresh-rule implementation can silently diverge between storage, server scheduling, and both shells if the effective-setting logic is duplicated instead of shared.
-2. Homebrew packaging can become stale quickly if the release artifact names or checksums change without a matching tap update path.
-3. Crash hardening can regress user-visible behavior if error propagation changes without tests for the common paths.
+# Steps
+1. Inspect the CloudKit coordinator initialization path and make it lazy or failure-tolerant.
+2. Stop constructing or touching CloudKit state during app startup unless the user actually enables sync or the app explicitly refreshes sync status.
+3. Add a fallback state for CloudKit initialization failures so the UI can still show local-only operation.
+4. Add regression tests that verify app state can initialize without CloudKit and that sync remains optional.
+5. Rebuild and run the Apple test suite plus the release gate.
 
-## Affected Files
-- `core/crates/models/src/lib.rs`
-- `core/crates/storage/src/lib.rs`
-- `core/crates/ffi_bridge/src/lib.rs`
-- `core/crates/app_server/src/main.rs`
-- `apps/apple/Shared/*.swift`
-- `apps/apple/Tests/InfoMatrixShellTests/*.swift`
-- `apps/flutter/lib/core/*.dart`
-- `apps/flutter/lib/ui/*.dart`
-- `apps/flutter/test/*.dart`
-- `tooling/scripts/*.sh`
-- `.github/workflows/release.yml`
-- `docs/*.md`
-- `Formula/*` or `Casks/*` if a Homebrew tap layout is added
-
-## Steps
-1. Add a refresh-rule model in the shared Rust domain layer, persist it in SQLite, and expose read/write APIs for global, group, and feed-level settings.
-2. Teach the background refresh scheduler and both shells to compute and edit the effective refresh behavior using the new inheritance chain.
-3. Add regression tests for refresh-rule persistence, inheritance, and scheduling behavior.
-4. Add a Homebrew tap layout or equivalent metadata so macOS users can install the app via `brew` in addition to downloading release artifacts.
-5. Review the user-facing mutation flows for obvious crash hazards and convert any reachable hard failures into recoverable errors with tests.
-6. Update release and installation docs so the supported install paths and refresh behavior are explicit.
-
-## Validation
-- `cargo test --workspace`
+# Validation
 - `swift test --disable-sandbox`
-- `flutter test`
 - `tooling/scripts/release_check.sh`
-- Local install smoke checks for the packaged artifacts where the platform is available
+- If possible, smoke-run the macOS app bundle or at least verify the crash logs no longer show startup termination from `CloudKitSyncCoordinator.init`.
 
-## Risks
-- A cross-language settings change can require coordinated updates in Rust, Swift, and Dart at the same time.
-- Homebrew metadata may need release-specific URLs or checksums, so the tap may require a follow-up automation once the tap format is chosen.
-- Installing refresh rules at the wrong abstraction level could make the UI confusing unless the effective inheritance is shown clearly.
+# Risks
+- CloudKit may still be unavailable on some machines even after lazy init; the fallback must prevent that from surfacing as a crash.
+- Changing startup behavior may alter when sync status appears in the UI, so the UI must tolerate `nil` or disabled sync state.
+- If the issue is actually an entitlement/signing problem, lazy init will fix the crash symptom but not the eventual sync feature availability.
 
-## Rollback Notes
-- If the refresh-rule model is too broad, keep the existing global background refresh settings and revert the new per-feed/per-group overrides.
-- If the Homebrew path is unstable, remove the tap metadata and keep the GitHub Releases download path intact.
-- If crash-hardening changes disrupt core flows, revert the affected UI adapters while keeping the new tests and model types isolated for a narrower follow-up.
+# Rollback Notes
+- If the lazy CloudKit path introduces regressions, revert only the coordinator startup changes and keep the crash report evidence for the next iteration.
