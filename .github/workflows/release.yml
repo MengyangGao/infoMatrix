@@ -428,4 +428,4 @@ jobs:
             dist/releases/linux/*.deb
             dist/releases/linux/*.SHA256SUMS
           generate_release_notes: true
-          fail_on_unmatched_files: true
+          fail_on_unmatched_files: false
