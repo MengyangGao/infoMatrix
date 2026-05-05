@@ -100,8 +100,13 @@ fn collect_outline(
     out: &mut Vec<OpmlFeed>,
 ) -> Result<(), OpmlError> {
     if let Some(xml_url) = outline.xml_url.as_ref().filter(|value| !value.trim().is_empty()) {
-        let xml_url = Url::parse(xml_url).map_err(|err| OpmlError::InvalidUrl(err.to_string()))?;
-        let html_url = outline.html_url.as_ref().and_then(|value| Url::parse(value).ok());
+        let xml_url = parse_web_url(xml_url, "xmlUrl")?;
+        let html_url = outline
+            .html_url
+            .as_ref()
+            .filter(|value| !value.trim().is_empty())
+            .map(|value| parse_web_url(value, "htmlUrl"))
+            .transpose()?;
         out.push(OpmlFeed {
             title: outline.title.clone().or_else(|| outline.text.clone()),
             xml_url,
@@ -117,6 +122,18 @@ fn collect_outline(
     }
 
     Ok(())
+}
+
+fn parse_web_url(value: &str, field_name: &str) -> Result<Url, OpmlError> {
+    let parsed = Url::parse(value.trim())
+        .map_err(|err| OpmlError::InvalidUrl(format!("{field_name}: {err}")))?;
+    if parsed.scheme() != "http" && parsed.scheme() != "https" {
+        return Err(OpmlError::InvalidUrl(format!(
+            "{field_name}: unsupported URL scheme {}",
+            parsed.scheme()
+        )));
+    }
+    Ok(parsed)
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -174,5 +191,33 @@ mod tests {
         assert_eq!(imported.len(), 1);
         assert_eq!(imported[0].group.as_deref(), Some("Tech"));
         assert_eq!(imported[0].title.as_deref(), Some("Example"));
+    }
+
+    #[test]
+    fn import_rejects_non_web_feed_urls() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+  <body>
+    <outline text="Local" type="rss" xmlUrl="file:///tmp/feed.xml" />
+  </body>
+</opml>"#;
+
+        let result = import_opml(xml);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn import_rejects_non_web_site_urls() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+  <body>
+    <outline text="Local" type="rss" xmlUrl="https://example.com/feed.xml" htmlUrl="ftp://example.com" />
+  </body>
+</opml>"#;
+
+        let result = import_opml(xml);
+
+        assert!(result.is_err());
     }
 }

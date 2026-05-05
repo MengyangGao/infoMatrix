@@ -22,6 +22,14 @@ public final class NativeReaderService: ReaderService, @unchecked Sendable {
         }
     }
 
+    struct AddSubscriptionPayload: Decodable {
+        let feedId: String
+
+        enum CodingKeys: String, CodingKey {
+            case feedId = "feed_id"
+        }
+    }
+
     private func callFFI<T: Decodable>(
         _ ffiFunc: (UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>?,
         payload: [String: Any?]? = nil
@@ -120,11 +128,10 @@ public final class NativeReaderService: ReaderService, @unchecked Sendable {
     }
 
     public func listItems(feedID: String, limit: Int, searchQuery: String?) async throws -> [ArticleItem] {
-        return try callFFI(infomatrix_core_list_items_json, payload: [
-            "feed_id": feedID,
-            "limit": limit,
-            "q": searchQuery
-        ])
+        return try callFFI(
+            infomatrix_core_list_entries_json,
+            payload: Self.listItemsPayload(feedID: feedID, limit: limit, searchQuery: searchQuery)
+        )
     }
 
     public func listAllItems(
@@ -310,8 +317,7 @@ public final class NativeReaderService: ReaderService, @unchecked Sendable {
     }
 
     public func addSubscription(feedURL: String, title: String?) async throws -> String {
-        struct AddResponse: Decodable { let feedId: String }
-        let res: AddResponse = try callFFI(infomatrix_core_add_subscription_json, payload: ["feed_url": feedURL, "title": title])
+        let res: AddSubscriptionPayload = try callFFI(infomatrix_core_add_subscription_json, payload: ["feed_url": feedURL, "title": title])
         return res.feedId
     }
 
@@ -381,6 +387,14 @@ public final class NativeReaderService: ReaderService, @unchecked Sendable {
 }
 
 extension NativeReaderService {
+    static func listItemsPayload(feedID: String, limit: Int, searchQuery: String?) -> [String: Any?] {
+        [
+            "feed_id": feedID,
+            "limit": limit,
+            "q": searchQuery
+        ]
+    }
+
     static func itemDetailPayload(itemID: String) -> [String: Any?] {
         [
             "item_id": itemID

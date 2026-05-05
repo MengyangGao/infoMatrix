@@ -547,7 +547,6 @@ async fn add_subscription(
     let feed_url = Url::parse(&payload.feed_url)
         .map_err(|err| ApiError::BadRequest(format!("invalid feed url: {err}")))?;
     enforce_web_url(&feed_url, "feed url")?;
-    let guessed_site_url = derive_site_url_from_feed(&feed_url);
     let title_fallback = payload.title.clone();
     let probe_start = std::time::Instant::now();
     let direct_probe = {
@@ -613,24 +612,7 @@ async fn add_subscription(
         return Ok(Json(AddSubscriptionResponse { feed_id }));
     }
 
-    let icon_feed_url = feed_url.clone();
-    let mut storage = open_storage(&context)?;
-    let feed_id = storage.upsert_feed(&NewFeed {
-        feed_url: feed_url.clone(),
-        site_url: guessed_site_url.clone(),
-        title: title_fallback,
-        feed_type: FeedType::Unknown,
-    })?;
-
-    if let Some(site_url) = guessed_site_url {
-        hydrate_feed_from_discovery_cache(&mut storage, &feed_id, &feed_url, &site_url)?;
-        if let Some(icon_url) = feed_icon_url(Some(&site_url), &icon_feed_url) {
-            let _ = storage.set_feed_icon(&feed_id, &icon_url);
-        }
-        spawn_background_icon_refresh(context.clone(), feed_id.clone(), site_url);
-    }
-
-    Ok(Json(AddSubscriptionResponse { feed_id }))
+    Err(ApiError::BadRequest("direct feed URL did not resolve to a valid feed".to_owned()))
 }
 
 async fn subscribe_input(
@@ -2448,41 +2430,6 @@ fn cached_discovery_candidate_for_feed_url<'a>(
     cache.candidates.iter().find(|candidate| candidate.url == feed_url.as_str())
 }
 
-fn hydrate_feed_from_discovery_cache(
-    storage: &mut Storage,
-    feed_id: &str,
-    feed_url: &Url,
-    site_url: &Url,
-) -> Result<(), ApiError> {
-    let Some(cache_row) = storage.get_latest_discovery_cache(site_url.as_str())? else {
-        return Ok(());
-    };
-    let cache: DiscoveryCachePayload = serde_json::from_str(&cache_row.result_json)
-        .map_err(|err| ApiError::Internal(err.to_string()))?;
-    let Some(candidate) = cached_discovery_candidate_for_feed_url(&cache, feed_url) else {
-        return Ok(());
-    };
-
-    let parsed_feed = candidate.parsed_feed.clone();
-    let rebased_items = rebind_items_to_feed(feed_id, &parsed_feed.items);
-    storage.upsert_feed(&NewFeed {
-        feed_url: feed_url.clone(),
-        site_url: parsed_feed.site_url.clone().or_else(|| Some(site_url.clone())),
-        title: parsed_feed.title.clone().or(candidate.title.clone()),
-        feed_type: parsed_feed.feed_type,
-    })?;
-    storage.upsert_items(&rebased_items)?;
-    storage.record_fetch_result(
-        feed_id,
-        candidate.http_status,
-        candidate.etag.as_deref(),
-        candidate.last_modified.as_deref(),
-        candidate.duration_ms,
-        None,
-    )?;
-    Ok(())
-}
-
 fn collect_html_feed_candidates(
     html: &str,
     base_url: &Url,
@@ -3226,6 +3173,36 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn add_subscription_rejects_non_feed_page() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let db = dir.path().join("infomatrix.db");
+        let page_server = spawn_webpage_server("<!doctype html><title>Not a feed</title>").await;
+        let app = app_router(AppContext {
+            db_path: db.to_string_lossy().to_string(),
+            user_agent: "test-agent".to_owned(),
+            timeout_secs: 3,
+            migrate_on_open: true,
+        });
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/api/v1/subscriptions")
+                    .header("content-type", "application/json")
+                    .body(Body::from(json!({"feed_url": page_server.as_str()}).to_string()))
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let storage = Storage::open(db.to_string_lossy().as_ref()).expect("open storage");
+        storage.migrate().expect("migrate");
+        assert!(storage.list_feeds().expect("list feeds").is_empty());
+    }
+
+    #[tokio::test]
     async fn due_feeds_endpoint_returns_ready_feeds() {
         let dir = tempfile::tempdir().expect("tempdir");
         let db = dir.path().join("infomatrix.db");
@@ -3526,6 +3503,17 @@ mod tests {
     async fn delete_feed_endpoint_removes_subscription() {
         let dir = tempfile::tempdir().expect("tempdir");
         let db = dir.path().join("infomatrix.db");
+        let feed_server = spawn_webpage_server(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Delete Me</title>
+    <link>https://example.com</link>
+    <description>Local example feed</description>
+  </channel>
+</rss>"#,
+        )
+        .await;
         let app = app_router(AppContext {
             db_path: db.to_string_lossy().to_string(),
             user_agent: "test-agent".to_owned(),
@@ -3540,9 +3528,7 @@ mod tests {
                     .method(Method::POST)
                     .uri("/api/v1/subscriptions")
                     .header("content-type", "application/json")
-                    .body(Body::from(
-                        json!({"feed_url":"https://example.com/feed.xml"}).to_string(),
-                    ))
+                    .body(Body::from(json!({"feed_url": feed_server.as_str()}).to_string()))
                     .expect("request"),
             )
             .await

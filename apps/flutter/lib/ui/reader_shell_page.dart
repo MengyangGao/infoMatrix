@@ -92,9 +92,14 @@ class _ReaderShellPageState extends State<ReaderShellPage> {
     _counts = counts;
     if (_feeds.isEmpty) {
       _selectedFeed = null;
-      _selectedSelectionID = _inboxSelectionID;
-      _items = const <ItemModel>[];
-      _selectedItem = null;
+      final requestedSelection = preferredSelectionID ?? _selectedSelectionID;
+      _selectedSelectionID = _isSpecialSelection(requestedSelection)
+          ? requestedSelection
+          : _inboxSelectionID;
+      if (resetSelection) {
+        _selectedSelectionID = _inboxSelectionID;
+      }
+      await _loadItems();
       return;
     }
 
@@ -663,7 +668,8 @@ class _ReaderShellPageState extends State<ReaderShellPage> {
       }
       _selectedItem = hydratedDetail;
       _items = _items
-          .map((value) => value.id == hydratedDetail.id ? hydratedDetail : value)
+          .map(
+              (value) => value.id == hydratedDetail.id ? hydratedDetail : value)
           .toList(growable: false);
     });
   }
@@ -732,10 +738,12 @@ class _ReaderShellPageState extends State<ReaderShellPage> {
                   iconName: 'folder.fill',
                   badgeCount: _feeds
                       .where(
-                        (feed) => feed.groups.any((value) => value.id == group.id),
+                        (feed) =>
+                            feed.groups.any((value) => value.id == group.id),
                       )
                       .length,
-                  isSelected: _selectedSelectionID == _groupSelectionID(group.id),
+                  isSelected:
+                      _selectedSelectionID == _groupSelectionID(group.id),
                 ),
               )
               .toList(growable: false),
@@ -765,7 +773,8 @@ class _ReaderShellPageState extends State<ReaderShellPage> {
               metadata: <String>[
                 _selectedItem!.kind,
                 _selectedItem!.sourceKind,
-                if (_selectedItem!.publishedAt != null) _selectedItem!.publishedAt!,
+                if (_selectedItem!.publishedAt != null)
+                  _selectedItem!.publishedAt!,
               ],
             ),
       isLoading: _loading,
@@ -890,12 +899,21 @@ class _ReaderShellPageState extends State<ReaderShellPage> {
         created,
         isSavedForLater: true,
       );
-      final detailed = await widget.backend.fetchFullText(later.id);
+      var detailed = later;
+      var statusText = '网页已保存到稍后读';
+      try {
+        detailed = await widget.backend.fetchFullText(later.id);
+      } catch (error) {
+        statusText = '网页已保存到稍后读，全文抓取失败: $error';
+      }
       _selectedFeed = null;
       _selectedSelectionID = _laterSelectionID;
+      await _loadFeeds(preferredSelectionID: _laterSelectionID);
       _selectedItem = detailed;
-      await _loadFeeds();
-      _statusText = '网页已保存到稍后读';
+      _items = _items
+          .map((value) => value.id == detailed.id ? detailed : value)
+          .toList(growable: false);
+      _statusText = statusText;
     });
   }
 
@@ -1496,7 +1514,8 @@ class _ReaderShellPageState extends State<ReaderShellPage> {
           const SizedBox(height: 8),
           ..._groups.map((group) {
             final count = _feeds
-                .where((feed) => feed.groups.any((entry) => entry.id == group.id))
+                .where(
+                    (feed) => feed.groups.any((entry) => entry.id == group.id))
                 .length;
             return Padding(
               padding: const EdgeInsets.only(bottom: 6),
@@ -1507,7 +1526,8 @@ class _ReaderShellPageState extends State<ReaderShellPage> {
                       icon: Icons.folder_outlined,
                       title: group.name,
                       count: count,
-                      selected: _selectedSelectionID == _groupSelectionID(group.id),
+                      selected:
+                          _selectedSelectionID == _groupSelectionID(group.id),
                       onTap: () => _selectGroup(group),
                     ),
                   ),

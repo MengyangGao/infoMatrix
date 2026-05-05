@@ -1,7 +1,5 @@
 //! Feed parsing and normalization for RSS, Atom, and JSON Feed.
 
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
 use std::io::Cursor;
 
 use atom_syndication::Feed as AtomFeed;
@@ -181,7 +179,7 @@ fn parse_rss(source_feed_id: &str, body: &[u8]) -> Result<ParsedFeed, ParseError
 fn parse_atom(source_feed_id: &str, body: &[u8]) -> Result<ParsedFeed, ParseError> {
     let feed =
         AtomFeed::read_from(Cursor::new(body)).map_err(|e| ParseError::Atom(e.to_string()))?;
-    let site_url = feed.links().iter().find_map(|l| Url::parse(l.href()).ok());
+    let site_url = atom_site_url(&feed);
     let title = non_empty(Some(feed.title().to_string()));
     let description = non_empty(feed.subtitle().map(|text| text.value.clone()));
 
@@ -190,11 +188,15 @@ fn parse_atom(source_feed_id: &str, body: &[u8]) -> Result<ParsedFeed, ParseErro
         .iter()
         .map(|entry| {
             let external_item_id = non_empty(Some(entry.id().to_owned()));
-            let canonical_url = entry.links().iter().find_map(|l| Url::parse(l.href()).ok());
+            let canonical_url = atom_entry_url(entry.links());
             let summary = non_empty(entry.summary().map(|text| text.value.clone()));
             let content_html =
                 non_empty(entry.content().and_then(|c| c.value().map(ToOwned::to_owned)));
-            let content_text = content_html.as_ref().map(|v| strip_html_tags(v));
+            let content_text = content_html
+                .as_ref()
+                .map(|v| strip_html_tags(v))
+                .or_else(|| summary.as_ref().map(|v| strip_html_tags(v)))
+                .filter(|value| !value.trim().is_empty());
             let title_value = non_empty(Some(entry.title().to_string()))
                 .unwrap_or_else(|| "(untitled)".to_owned());
             let author = entry
@@ -343,9 +345,10 @@ fn hash_item_payload(
 }
 
 fn stable_hash(value: &str) -> String {
-    let mut hasher = DefaultHasher::new();
-    value.hash(&mut hasher);
-    format!("{:016x}", hasher.finish())
+    let mut hasher = Sha256::new();
+    hasher.update(value.as_bytes());
+    let hex = to_hex(&hasher.finalize());
+    hex[..16].to_owned()
 }
 
 fn non_empty(value: Option<String>) -> Option<String> {
@@ -367,7 +370,11 @@ fn rss_image_enclosure_html(item: &rss::Item) -> Option<String> {
     if url.trim().is_empty() {
         return None;
     }
-    Some(format!(r#"<p><img src="{url}" alt="" /></p>"#))
+    let parsed = Url::parse(url).ok()?;
+    if parsed.scheme() != "http" && parsed.scheme() != "https" {
+        return None;
+    }
+    Some(format!(r#"<p><img src="{}" alt="" /></p>"#, escape_html_attr(parsed.as_str())))
 }
 
 fn strip_html_tags(value: &str) -> String {
@@ -392,6 +399,58 @@ fn to_hex(bytes: &[u8]) -> String {
         out.push(HEX[(byte & 0x0f) as usize] as char);
     }
     out
+}
+
+fn atom_site_url(feed: &AtomFeed) -> Option<Url> {
+    feed.links()
+        .iter()
+        .find(|link| atom_link_is_html_alternate(link))
+        .and_then(|link| Url::parse(link.href()).ok())
+        .or_else(|| {
+            feed.links()
+                .iter()
+                .find(|link| link.rel() != "self")
+                .and_then(|link| Url::parse(link.href()).ok())
+        })
+        .or_else(|| feed.links().iter().find_map(|link| Url::parse(link.href()).ok()))
+}
+
+fn atom_entry_url(links: &[atom_syndication::Link]) -> Option<Url> {
+    links
+        .iter()
+        .find(|link| atom_link_is_html_alternate(link))
+        .and_then(|link| Url::parse(link.href()).ok())
+        .or_else(|| {
+            links
+                .iter()
+                .find(|link| link.rel() != "self")
+                .and_then(|link| Url::parse(link.href()).ok())
+        })
+        .or_else(|| links.iter().find_map(|link| Url::parse(link.href()).ok()))
+}
+
+fn atom_link_is_html_alternate(link: &atom_syndication::Link) -> bool {
+    if link.rel() != "alternate" {
+        return false;
+    }
+    match link.mime_type().map(|value| value.to_ascii_lowercase()) {
+        Some(mime_type) => mime_type.contains("html") || mime_type == "text/plain",
+        None => true,
+    }
+}
+
+fn escape_html_attr(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len());
+    for ch in value.chars() {
+        match ch {
+            '&' => escaped.push_str("&amp;"),
+            '"' => escaped.push_str("&quot;"),
+            '<' => escaped.push_str("&lt;"),
+            '>' => escaped.push_str("&gt;"),
+            _ => escaped.push(ch),
+        }
+    }
+    escaped
 }
 
 #[derive(Debug, Deserialize)]
@@ -462,6 +521,7 @@ mod tests {
         assert_eq!(parsed.feed_type, FeedType::JsonFeed);
         assert_eq!(parsed.items.len(), 1);
         assert_eq!(parsed.items[0].title, "JSON Item One");
+        assert_eq!(parsed.items[0].id, "itm_fc26fe9629b24041");
     }
 
     #[test]
@@ -532,5 +592,58 @@ mod tests {
         let bytes = std::fs::read(fixture_path("valid_atom.xml")).expect("fixture must exist");
         let detected = detect_feed_type(&bytes, Some("text/xml; charset=utf-8"));
         assert_eq!(detected, FeedType::Atom);
+    }
+
+    #[test]
+    fn atom_prefers_home_and_article_links_with_summary_text_fallback() {
+        let atom = br#"<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Example Atom</title>
+  <link rel="self" type="application/atom+xml" href="https://example.com/feed.xml" />
+  <link rel="alternate" type="text/html" href="https://example.com/" />
+  <updated>2026-03-23T12:00:00Z</updated>
+  <id>https://example.com/feed</id>
+  <entry>
+    <title>Entry</title>
+    <link rel="self" type="application/atom+xml" href="https://example.com/feed/entry.atom" />
+    <link rel="alternate" type="text/html" href="https://example.com/articles/entry" />
+    <id>entry-1</id>
+    <updated>2026-03-23T12:00:00Z</updated>
+    <summary>Summary fallback</summary>
+  </entry>
+</feed>"#;
+
+        let parsed = parse_feed("feed_1", atom, Some("application/atom+xml")).expect("atom parse");
+
+        assert_eq!(parsed.site_url.as_ref().map(Url::as_str), Some("https://example.com/"));
+        assert_eq!(
+            parsed.items[0].canonical_url.as_ref().map(Url::as_str),
+            Some("https://example.com/articles/entry")
+        );
+        assert_eq!(parsed.items[0].content_text.as_deref(), Some("Summary fallback"));
+    }
+
+    #[test]
+    fn rss_image_enclosure_html_uses_only_safe_web_urls() {
+        let rss = br#"<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Images</title>
+    <link>https://example.com</link>
+    <description>Image feed</description>
+    <item>
+      <title>Image item</title>
+      <guid>image-1</guid>
+      <enclosure url="https://example.com/image.png?x=1&amp;y=%22" type="image/png" length="123" />
+    </item>
+  </channel>
+</rss>"#;
+
+        let parsed = parse_feed("feed_1", rss, Some("application/rss+xml")).expect("rss parse");
+
+        assert_eq!(
+            parsed.items[0].content_html.as_deref(),
+            Some(r#"<p><img src="https://example.com/image.png?x=1&amp;y=%22" alt="" /></p>"#)
+        );
     }
 }

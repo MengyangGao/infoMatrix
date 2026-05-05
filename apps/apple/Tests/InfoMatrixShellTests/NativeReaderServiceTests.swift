@@ -2,6 +2,25 @@ import XCTest
 @testable import InfoMatrixShell
 
 final class NativeReaderServiceTests: XCTestCase {
+    func testAddSubscriptionPayloadDecodesSnakeCaseFeedID() throws {
+        let data = #"{"feed_id":"feed-123"}"#.data(using: .utf8)!
+        let payload = try JSONDecoder().decode(NativeReaderService.AddSubscriptionPayload.self, from: data)
+
+        XCTAssertEqual(payload.feedId, "feed-123")
+    }
+
+    func testListItemsPayloadCarriesSearchQuery() {
+        let payload = NativeReaderService.listItemsPayload(
+            feedID: "feed-123",
+            limit: 25,
+            searchQuery: "needle"
+        )
+
+        XCTAssertEqual(payload["feed_id"] as? String, "feed-123")
+        XCTAssertEqual(payload["limit"] as? Int, 25)
+        XCTAssertEqual(payload["q"] as? String, "needle")
+    }
+
     func testItemDetailAndFullTextPayloadUseItemIDKey() {
         let detailPayload = NativeReaderService.itemDetailPayload(itemID: "item-123")
         XCTAssertEqual(detailPayload["item_id"] as? String, "item-123")

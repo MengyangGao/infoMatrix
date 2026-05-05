@@ -4,6 +4,7 @@ import 'package:infomatrix_shell/app.dart';
 import 'package:infomatrix_shell/core/models.dart';
 import 'package:infomatrix_shell/core/reader_presentation.dart';
 import 'package:infomatrix_shell/core/reader_backend.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _FakeBackend implements ReaderBackend {
@@ -428,6 +429,119 @@ class _PagedBackend extends _FakeBackend {
   }
 }
 
+class _NoFeedBackend extends _FakeBackend {
+  @override
+  Future<List<FeedModel>> listFeeds() async => const <FeedModel>[];
+
+  @override
+  Future<List<FeedGroupModel>> listGroups() async => const <FeedGroupModel>[];
+}
+
+class _BookmarkFullTextFailureBackend extends _NoFeedBackend {
+  final List<ItemModel> entries = <ItemModel>[];
+
+  @override
+  Future<ItemModel> createEntry({
+    String? id,
+    required String title,
+    String? kind,
+    String? sourceKind,
+    String? sourceID,
+    String? sourceURL,
+    String? sourceTitle,
+    String? canonicalURL,
+    String? summary,
+    String? contentHTML,
+    String? contentText,
+    String? rawHash,
+  }) async {
+    final item = ItemModel(
+      id: id ?? 'bookmark-1',
+      title: title,
+      kind: kind ?? 'bookmark',
+      sourceKind: sourceKind ?? 'web',
+      sourceID: sourceID,
+      sourceURL: sourceURL,
+      sourceTitle: sourceTitle,
+      canonicalUrl: canonicalURL,
+      publishedAt: null,
+      summaryPreview: summary,
+      summary: summary,
+      contentHTML: contentHTML,
+      contentText: contentText,
+      isRead: false,
+      isStarred: false,
+      isSavedForLater: false,
+      isArchived: false,
+    );
+    entries.add(item);
+    return item;
+  }
+
+  @override
+  Future<ItemModel> patchItemState(
+    ItemModel item, {
+    bool? isRead,
+    bool? isStarred,
+    bool? isSavedForLater,
+    bool? isArchived,
+  }) async {
+    final updated = item.copyWith(
+      isRead: isRead,
+      isStarred: isStarred,
+      isSavedForLater: isSavedForLater,
+      isArchived: isArchived,
+    );
+    final index = entries.indexWhere((value) => value.id == item.id);
+    if (index >= 0) {
+      entries[index] = updated;
+    }
+    return updated;
+  }
+
+  @override
+  Future<List<ItemModel>> listAllItems({
+    int limit = 200,
+    String? searchQuery,
+    String filter = 'all',
+    String? kind,
+  }) async {
+    final filtered = entries.where((item) {
+      if (kind != null && item.kind != kind) {
+        return false;
+      }
+      if (filter == 'later') {
+        return item.isSavedForLater && !item.isArchived;
+      }
+      return !item.isArchived;
+    }).toList(growable: false);
+    return filtered.take(limit).toList(growable: false);
+  }
+
+  @override
+  Future<ItemScopeCounts> itemCounts() async {
+    final later = entries.where((item) => item.isSavedForLater).length;
+    return ItemScopeCounts(
+      all: entries.length,
+      unread: entries.where((item) => !item.isRead).length,
+      starred: entries.where((item) => item.isStarred).length,
+      later: later,
+      notes: entries.where((item) => item.kind == 'note').length,
+      archive: entries.where((item) => item.isArchived).length,
+    );
+  }
+
+  @override
+  Future<ItemModel> itemDetail(String itemID) async {
+    return entries.firstWhere((item) => item.id == itemID);
+  }
+
+  @override
+  Future<ItemModel> fetchFullText(String itemID) async {
+    throw ReaderBackendException('offline');
+  }
+}
+
 void main() {
   testWidgets('renders shell with fake backend', (tester) async {
     await tester.binding.setSurfaceSize(const Size(1600, 1200));
@@ -495,7 +609,55 @@ void main() {
     expect(backend.listItemLimits.last, 350);
   });
 
-  test('reader presentation contract can represent sidebar and detail state', () {
+  testWidgets('special scopes load entries when there are no feeds',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1600, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      InfoMatrixApp(backendFactory: () => _NoFeedBackend()),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Quick note'), findsWidgets);
+    expect(find.textContaining('1 条内容'), findsWidgets);
+  });
+
+  testWidgets('bookmark remains saved when full text fetch fails',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1600, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final backend = _BookmarkFullTextFailureBackend();
+    await tester.pumpWidget(
+      InfoMatrixApp(backendFactory: () => backend),
+    );
+
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(TextButton, '网页').first);
+    await tester.pumpAndSettle();
+
+    final dialogFields = find.descendant(
+      of: find.byType(Dialog),
+      matching: find.byType(TextField),
+    );
+    await tester.enterText(dialogFields.at(0), 'https://example.com/saved');
+    await tester.enterText(dialogFields.at(1), 'Saved Article');
+    await tester.pump();
+    await tester.tap(find.descendant(
+      of: find.byType(Dialog),
+      matching: find.widgetWithText(FilledButton, '保存'),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(backend.entries.single.isSavedForLater, isTrue);
+    expect(find.text('Saved Article'), findsWidgets);
+    expect(find.textContaining('全文抓取失败'), findsOneWidget);
+  });
+
+  test('reader presentation contract can represent sidebar and detail state',
+      () {
     const state = ReaderScreenState(
       headerTitle: '收件箱',
       headerSubtitle: '42 条内容',

@@ -72,6 +72,7 @@ struct ListItemsInput {
     db_path: Option<String>,
     feed_id: String,
     limit: Option<usize>,
+    q: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -606,23 +607,7 @@ pub unsafe extern "C" fn infomatrix_core_add_subscription_json(
             return Ok(Output { feed_id });
         }
 
-        let mut storage = open_storage(&payload.db_path)?;
-        let site_url = derive_site_url_from_feed(&feed_url);
-        let feed_url_for_icon = feed_url.clone();
-        let feed_id = storage
-            .upsert_feed(&NewFeed {
-                feed_url,
-                site_url: site_url.clone(),
-                title: title_fallback,
-                feed_type: FeedType::Unknown,
-            })
-            .map_err(|err| err.to_string())?;
-        if let Some(site_url) = site_url.as_ref() {
-            if let Some(icon_url) = feed_icon_url(Some(site_url), &feed_url_for_icon) {
-                let _ = storage.set_feed_icon(&feed_id, &icon_url);
-            }
-        }
-        Ok(Output { feed_id })
+        Err("direct feed URL did not resolve to a valid feed".to_owned())
     }) {
         Ok(ptr) => ptr,
         Err(ptr) => ptr,
@@ -1213,7 +1198,11 @@ pub unsafe extern "C" fn infomatrix_core_list_items_json(input: *const c_char) -
     match with_input::<ListItemsInput, _>(input, |payload| {
         let core = open_app_core(&payload.db_path)?;
         let rows = core
-            .search_items_for_feed(&payload.feed_id, payload.limit.unwrap_or(100), None)
+            .search_items_for_feed(
+                &payload.feed_id,
+                payload.limit.unwrap_or(100),
+                payload.q.as_deref(),
+            )
             .map_err(|err| err.to_string())?;
 
         let items: Vec<EntryOutput> = rows.into_iter().map(entry_summary_output_from_row).collect();
@@ -2467,6 +2456,19 @@ mod tests {
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0]["title"], "Hello");
 
+        let search_payload = serde_json::json!({
+            "db_path": temp.path().to_string_lossy(),
+            "feed_id": feed_id,
+            "limit": 10,
+            "q": "missing"
+        });
+        let search_input = CString::new(search_payload.to_string()).expect("cstring");
+        let search_output = unsafe { infomatrix_core_list_items_json(search_input.as_ptr()) };
+        let search_envelope = decode_envelope(search_output);
+        assert_eq!(search_envelope["ok"], true);
+        let search_entries = search_envelope["data"].as_array().expect("search entries array");
+        assert!(search_entries.is_empty());
+
         let list_payload = serde_json::json!({ "db_path": temp.path().to_string_lossy() });
         let list_input = CString::new(list_payload.to_string()).expect("cstring");
         let list_output = unsafe { infomatrix_core_list_feeds_json(list_input.as_ptr()) };
@@ -2477,6 +2479,48 @@ mod tests {
         assert_eq!(feeds.len(), 1);
         assert_eq!(feeds[0]["title"], "Local Example Feed");
         assert_eq!(feeds[0]["icon_url"], "https://example.com/favicon.ico");
+
+        let _ = server_handle.join();
+    }
+
+    #[test]
+    fn add_subscription_rejects_non_feed_response() {
+        let temp = tempfile::NamedTempFile::new().expect("temp db");
+        let db_path = temp.path().to_string_lossy().to_string();
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind listener");
+        let port = listener.local_addr().expect("local addr").port();
+        let server_handle = std::thread::spawn(move || {
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut buffer = [0u8; 2048];
+                let _ = std::io::Read::read(&mut stream, &mut buffer);
+                let body = "<!doctype html><title>Not a feed</title>";
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                let _ = std::io::Write::write_all(&mut stream, response.as_bytes());
+                let _ = std::io::Write::flush(&mut stream);
+            }
+        });
+
+        let add_payload = serde_json::json!({
+            "db_path": db_path,
+            "feed_url": format!("http://127.0.0.1:{port}/not-feed.html"),
+            "title": "Not a Feed"
+        });
+        let add_input = CString::new(add_payload.to_string()).expect("cstring");
+        let add_output = unsafe { infomatrix_core_add_subscription_json(add_input.as_ptr()) };
+        let add_envelope = decode_envelope(add_output);
+        assert_eq!(add_envelope["ok"], false, "add envelope: {add_envelope}");
+
+        let list_payload = serde_json::json!({ "db_path": temp.path().to_string_lossy() });
+        let list_input = CString::new(list_payload.to_string()).expect("cstring");
+        let list_output = unsafe { infomatrix_core_list_feeds_json(list_input.as_ptr()) };
+        let list_envelope = decode_envelope(list_output);
+        assert_eq!(list_envelope["ok"], true);
+        let feeds = list_envelope["data"].as_array().expect("feeds array");
+        assert!(feeds.is_empty());
 
         let _ = server_handle.join();
     }
@@ -2621,15 +2665,15 @@ mod tests {
         let temp = tempfile::NamedTempFile::new().expect("temp db");
         let db_path = temp.path().to_string_lossy().to_string();
 
-        let add_payload = serde_json::json!({
-            "db_path": db_path,
-            "feed_url": "https://example.com/feed.xml",
-            "title": "Example Feed"
-        });
-        let add_input = CString::new(add_payload.to_string()).expect("cstring");
-        let add_output = unsafe { infomatrix_core_add_subscription_json(add_input.as_ptr()) };
-        let add_envelope = decode_envelope(add_output);
-        assert_eq!(add_envelope["ok"], true);
+        let storage = open_storage(&Some(db_path.clone())).expect("open storage");
+        let feed_id = storage
+            .upsert_feed(&NewFeed {
+                feed_url: Url::parse("https://example.com/feed.xml").expect("feed url"),
+                site_url: Some(Url::parse("https://example.com").expect("site url")),
+                title: Some("Example Feed".to_owned()),
+                feed_type: FeedType::Rss,
+            })
+            .expect("seed feed");
 
         let create_group_payload = serde_json::json!({
             "db_path": temp.path().to_string_lossy(),
@@ -2655,7 +2699,7 @@ mod tests {
 
         let update_feed_payload = serde_json::json!({
             "db_path": temp.path().to_string_lossy(),
-            "feed_id": add_envelope["data"]["feed_id"].as_str().expect("feed id"),
+            "feed_id": feed_id,
             "title": "Renamed Feed"
         });
         let update_feed_input = CString::new(update_feed_payload.to_string()).expect("cstring");
@@ -2666,7 +2710,7 @@ mod tests {
 
         let update_group_payload = serde_json::json!({
             "db_path": temp.path().to_string_lossy(),
-            "feed_id": add_envelope["data"]["feed_id"].as_str().expect("feed id"),
+            "feed_id": feed_id,
             "group_id": create_group_envelope["data"]["id"].as_str().expect("group id")
         });
         let update_group_input = CString::new(update_group_payload.to_string()).expect("cstring");
@@ -2691,7 +2735,7 @@ mod tests {
 
         let delete_payload = serde_json::json!({
             "db_path": temp.path().to_string_lossy(),
-            "feed_id": add_envelope["data"]["feed_id"].as_str().expect("feed id")
+            "feed_id": feed_id
         });
         let delete_input = CString::new(delete_payload.to_string()).expect("cstring");
         let delete_output = unsafe { infomatrix_core_delete_feed_json(delete_input.as_ptr()) };
