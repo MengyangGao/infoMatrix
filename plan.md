@@ -19,6 +19,10 @@ Users should be able to launch the macOS app from the generated app/ZIP/DMG with
 - `plan.md`
 - `apps/apple/XcodeGen/project.yml`
 - `tooling/scripts/package_macos_release.sh`
+- `tooling/scripts/package_flutter_linux_release.sh`
+- `core/Cargo.toml`
+- `core/Cargo.lock`
+- `apps/flutter/pubspec.yaml`
 - `apps/apple/macOS/XcodeApp/MacApp.swift`
 
 # Steps
@@ -34,6 +38,7 @@ Users should be able to launch the macOS app from the generated app/ZIP/DMG with
    - copy the staged app into the DMG with `ditto` instead of `cp -R`
 5. Regenerate/build the macOS Xcode target and verify the resulting app launches through `open`.
 6. Verify existing release diagnostics: `codesign`, `spctl`, ZIP/DMG checks where applicable.
+7. Bump downloadable artifact defaults from `0.1.0` to `0.1.1` before pushing the release-path fixes.
 
 # Validation
 - `xcodebuild -project apps/apple/XcodeGen/InfoMatrix.xcodeproj -scheme InfoMatrix-macOS -configuration Debug -destination "platform=macOS" ... build`
@@ -41,6 +46,7 @@ Users should be able to launch the macOS app from the generated app/ZIP/DMG with
 - `open -n -W <built app>`
 - `codesign --verify --deep --strict --verbose=2 <app>`
 - `spctl --assess --type execute --verbose <app>` as a diagnostic, with ad-hoc failures treated as expected for local artifacts.
+- `cargo check --workspace`
 
 # Risks
 - Overlooked risk 1: the user's real crash may be caused by their local `~/.infomatrix/infomatrix.db`, which this machine does not reproduce.
