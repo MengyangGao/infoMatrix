@@ -82,11 +82,61 @@ notary_submit() {
   exit 1
 }
 
+verify_app_signature() {
+  local item="$1"
+  codesign --verify --deep --strict --verbose=2 "${item}"
+}
+
+assess_gatekeeper() {
+  local item="$1"
+  local label="$2"
+  local output
+  local status
+
+  trap - ERR
+  set +e
+  output="$(spctl --assess --type execute --verbose "${item}" 2>&1)"
+  status="$?"
+  set -e
+  trap 'on_error "$?" "${BASH_LINENO[0]}" "$BASH_COMMAND"' ERR
+
+  if [[ "${status}" -eq 0 ]]; then
+    echo "Gatekeeper assessment passed for ${label}."
+    return 0
+  fi
+
+  if [[ -n "${MACOS_SIGNING_IDENTITY}" || "${MACOS_NOTARIZE}" == "1" || "${MACOS_REQUIRE_SIGNED_RELEASE}" == "1" || "${MACOS_REQUIRE_NOTARIZED_RELEASE}" == "1" ]]; then
+    echo "Gatekeeper assessment failed for ${label}:" >&2
+    echo "${output}" >&2
+    return "${status}"
+  fi
+
+  echo "Warning: Gatekeeper assessment did not pass for ${label}." >&2
+  echo "${output}" >&2
+  echo "This artifact is ad-hoc signed for local testing only." >&2
+  echo "Set INFOMATRIX_MACOS_SIGNING_IDENTITY and INFOMATRIX_MACOS_NOTARIZE=1 for distributable macOS releases." >&2
+}
+
+run_xcodegen() {
+  if command -v mint >/dev/null 2>&1; then
+    mint run xcodegen
+    return
+  fi
+
+  if command -v xcodegen >/dev/null 2>&1; then
+    xcodegen
+    return
+  fi
+
+  echo "Unable to find XcodeGen. Install mint or xcodegen before packaging the macOS app." >&2
+  exit 1
+}
+
 echo "[1/3] Building Apple XCFramework..."
 "${ROOT_DIR}/tooling/scripts/build_apple_xcframework.sh"
 
 echo "[1.5/3] Generating Xcode project..."
-(cd "${ROOT_DIR}/apps/apple/XcodeGen" && mint run xcodegen)
+(cd "${ROOT_DIR}/apps/apple/XcodeGen" && run_xcodegen)
 
 if [[ ! -d "${APPLE_PROJECT}" ]]; then
   echo "Error: Xcode project not found at ${APPLE_PROJECT}" >&2
@@ -127,6 +177,7 @@ ditto "${APP_SOURCE}" "${APP_DIR}"
 
 echo "[3/3] Signing macOS app bundle..."
 sign_item "${APP_DIR}"
+verify_app_signature "${APP_DIR}"
 
 if [[ "${MACOS_NOTARIZE}" == "1" ]]; then
   echo "Notarizing macOS app bundle..."
@@ -136,11 +187,10 @@ if [[ "${MACOS_NOTARIZE}" == "1" ]]; then
   notary_submit "${NOTARY_ZIP_PATH}"
   xcrun stapler staple "${APP_DIR}"
   rm -f "${NOTARY_ZIP_PATH}"
-  if ! spctl --assess --type execute --verbose "${APP_DIR}" >/dev/null; then
-    echo "Gatekeeper verification failed for ${APP_DIR}" >&2
-    exit 1
-  fi
+  verify_app_signature "${APP_DIR}"
+  assess_gatekeeper "${APP_DIR}" "notarized macOS app bundle"
 else
+  assess_gatekeeper "${APP_DIR}" "macOS app bundle"
   echo "Skipping notarization because INFOMATRIX_MACOS_NOTARIZE is not set to 1."
 fi
 
@@ -153,7 +203,7 @@ echo "Creating DMG artifact..."
 DMG_STAGE="${STAGE_DIR}/dmg-root"
 rm -rf "${DMG_STAGE}"
 mkdir -p "${DMG_STAGE}"
-cp -R "${APP_DIR}" "${DMG_STAGE}/${APP_BUNDLE}"
+ditto "${APP_DIR}" "${DMG_STAGE}/${APP_BUNDLE}"
 ln -s /Applications "${DMG_STAGE}/Applications"
 DMG_PATH="${RELEASE_DIR}/${APP_NAME}-macos.dmg"
 rm -f "${DMG_PATH}"

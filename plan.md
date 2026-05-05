@@ -1,68 +1,54 @@
 # Objective
-Fix ten correctness and contract-alignment issues across the InfoMatrix Rust core, FFI bridge, Swift shell, and Flutter shell.
+Diagnose the macOS "opens then quits" report and fix serious launch/distribution bugs that can make the packaged macOS app behave differently from local builds.
 
 # User Value
-Users get more reliable RSS subscription, OPML import, feed parsing, search, read-it-later, and memo behavior without changing the app's local-first architecture.
+Users should be able to launch the macOS app from the generated app/ZIP/DMG with predictable behavior, and release scripts should clearly fail or warn when they produce an artifact that is not suitable for end-user distribution.
 
 # Constraints
-- Keep changes tightly scoped to the planned bug fixes.
-- Do not add dependencies unless a fix cannot be done safely with the existing stack.
-- Preserve the Rust-owned parsing/fetching/persistence boundary.
-- Keep SwiftUI and Flutter shells aligned with the existing FFI contract.
-- Add focused regression tests for non-trivial behavior changes.
+- Preserve the local-first architecture and keep networking/parsing out of SwiftUI views.
+- Do not add dependencies.
+- Do not push or publish artifacts without explicit approval.
+- Keep changes focused on macOS launch and packaging correctness.
 
 # Assumptions
-- [ASSUMPTION] This pass prioritizes correctness and contract alignment over visual redesign.
-- [ASSUMPTION] Invalid direct feed URLs should fail instead of creating empty unknown subscriptions.
-- [ASSUMPTION] Website discovery remains the supported fallback path for non-feed site URLs.
-- [ASSUMPTION] No dependency changes are required.
+- [ASSUMPTION] The reported flash crash happens from an app bundle, ZIP, or DMG artifact rather than by running `Contents/MacOS/InfoMatrix-macOS` directly.
+- [ASSUMPTION] A locally reproducible LaunchServices crash is not currently present on this machine; Debug, Release, `dist/InfoMatrix.app`, and the mounted DMG app stayed running.
+- [ASSUMPTION] We should still fix release-path mismatches because they can explain user-only behavior.
 
 # Affected Files
 - `plan.md`
-- `core/crates/parser/src/lib.rs`
-- `core/crates/opml/src/lib.rs`
-- `core/crates/app_server/src/main.rs`
-- `core/crates/ffi_bridge/src/lib.rs`
-- `apps/apple/Shared/NativeReaderService.swift`
-- `apps/apple/Tests/InfoMatrixShellTests/NativeReaderServiceTests.swift`
-- `apps/flutter/lib/ui/reader_shell_page.dart`
-- `apps/flutter/test/widget_test.dart`
+- `apps/apple/XcodeGen/project.yml`
+- `tooling/scripts/package_macos_release.sh`
+- `apps/apple/macOS/XcodeApp/MacApp.swift`
 
 # Steps
-1. Replace the stale release-focused plan with this implementation plan.
-2. Fix parser stability and feed metadata issues:
-   - use deterministic SHA-256-derived item IDs instead of `DefaultHasher`
-   - prefer Atom article links over feed/self links
-   - prefer Atom home/site links for feed `site_url`
-   - fall back to Atom summary text when content is absent
-   - validate and escape RSS image enclosure URLs before generating HTML
-3. Fix OPML and subscription validation:
-   - reject non-web OPML `xmlUrl` and `htmlUrl`
-   - prevent direct feed subscription from persisting unknown placeholder feeds after probe failure in both HTTP and FFI entrypoints
-4. Fix FFI/shell contract gaps:
-   - make `infomatrix_core_list_items_json` honor optional search query `q`
-   - make Swift `addSubscription` decode `feed_id`
-   - route Swift feed-scoped search through a searchable endpoint
-5. Fix Flutter local-first shell behavior:
-   - load special scopes even when there are no RSS subscriptions
-   - keep saved bookmarks visible even when optional full-text extraction fails
-6. Add focused regression tests for each changed behavior.
-7. Run Rust, Swift, and Flutter validation.
+1. Record the macOS crash investigation plan before edits.
+2. Align the generated Xcode macOS target with the maintained SwiftPM macOS entrypoint so packaged Release builds use the same AppDelegate/window activation path.
+3. Remove the stale Xcode-only macOS entrypoint to prevent future divergence.
+4. Harden the macOS packaging script:
+   - support direct `xcodegen` when `mint` is not installed
+   - verify code signatures after signing
+   - make Gatekeeper assessment explicit
+   - warn loudly for ad-hoc local-test artifacts
+   - fail Gatekeeper validation when a signed/notarized release is requested
+   - copy the staged app into the DMG with `ditto` instead of `cp -R`
+5. Regenerate/build the macOS Xcode target and verify the resulting app launches through `open`.
+6. Verify existing release diagnostics: `codesign`, `spctl`, ZIP/DMG checks where applicable.
 
 # Validation
-- `cargo test --workspace`
-- `cargo clippy --workspace --all-targets -- -D warnings`
-- `swift test`
-- `flutter test`
+- `xcodebuild -project apps/apple/XcodeGen/InfoMatrix.xcodeproj -scheme InfoMatrix-macOS -configuration Debug -destination "platform=macOS" ... build`
+- `xcodebuild -project apps/apple/XcodeGen/InfoMatrix.xcodeproj -scheme InfoMatrix-macOS -configuration Release -destination "platform=macOS" ... build`
+- `open -n -W <built app>`
+- `codesign --verify --deep --strict --verbose=2 <app>`
+- `spctl --assess --type execute --verbose <app>` as a diagnostic, with ad-hoc failures treated as expected for local artifacts.
 
 # Risks
-- Parser ID changes could affect existing entries whose old IDs were generated with `DefaultHasher`; Rust's default hasher was already not guaranteed stable, but this may still create duplicate rows for some previously persisted items.
-- Rejecting unknown direct feed subscriptions may remove a permissive workflow that someone used for manually staging feed URLs before they were reachable.
-- Full-text failure handling in Flutter must not mask failures from the actual bookmark creation or later-state mutation.
-- OPML files containing local file paths or custom schemes will now fail instead of partially importing.
-- Atom link preference changes could alter canonical URLs for feeds that rely on unusual link ordering.
+- Overlooked risk 1: the user's real crash may be caused by their local `~/.infomatrix/infomatrix.db`, which this machine does not reproduce.
+- Overlooked risk 2: Gatekeeper/quarantine failures may look like "flash crash" to users but do not always create `.ips` crash reports.
+- Overlooked risk 3: direct executable launch crashes are real for development workflows but are not the same path as Finder/`open` launching an `.app`.
+- Switching XcodeGen to the shared macOS entrypoint must avoid compiling two `@main` types in the same target.
+- Gatekeeper validation behavior differs between ad-hoc local builds and Developer ID notarized builds.
 
 # Rollback Notes
-- If parser ID changes cause unacceptable duplicate entries, revert only the deterministic ID change and keep the other parser fixes.
-- If direct placeholder subscriptions are needed, add an explicit "manual placeholder" flow instead of restoring silent fallback in FFI direct add.
-- If OPML validation proves too strict, loosen only `htmlUrl` handling while keeping `xmlUrl` web-only.
+- If the Xcode target fails because of package/import differences, revert the source path change and instead move the shared app delegate code into a common file without `@main`.
+- If stricter packaging checks block local development, keep signature verification but limit Gatekeeper failure to `INFOMATRIX_REQUIRE_SIGNED_RELEASE=1` or `INFOMATRIX_REQUIRE_NOTARIZED_RELEASE=1`.

@@ -41,7 +41,7 @@ targets:
     sources:
       - path: ../Shared
       - path: ../macOS/App/NotificationDeliveryCoordinator.swift
-      - path: ../macOS/XcodeApp/MacApp.swift
+      - path: ../macOS/App/InfoMatrixMacApp.swift
     resources:
       - path: ../Resources/macOS/Assets.xcassets
       - path: ../Resources/PrivacyInfo.xcprivacy
