@@ -231,6 +231,7 @@ class _ReaderShellPageState extends State<ReaderShellPage> {
       if (candidates.isEmpty) {
         final direct = await widget.backend.subscribeInput(siteUrl);
         await _loadFeeds(preferredSelectionID: direct.feedId);
+        await _refreshCurrentSelection();
         final warningText =
             result.warnings.isEmpty ? '' : '，${result.warnings.first}';
         _statusText =

@@ -435,6 +435,36 @@ class _NoFeedBackend extends _FakeBackend {
   Future<List<FeedGroupModel>> listGroups() async => const <FeedGroupModel>[];
 }
 
+class _DiscoveryFallbackBackend extends _FakeBackend {
+  final List<String> subscribeInputs = <String>[];
+  final List<String> refreshedFeedIds = <String>[];
+
+  @override
+  Future<SubscriptionResultModel> subscribeInput(String inputUrl) async {
+    subscribeInputs.add(inputUrl);
+    return const SubscriptionResultModel(
+      feedId: 'feed-1',
+      resolvedFeedUrl: 'https://example.com/feed.xml',
+      subscriptionSource: 'fallback_direct_feed',
+    );
+  }
+
+  @override
+  Future<DiscoverResult> discoverSite(String siteUrl) async {
+    return DiscoverResult(
+      normalizedSiteUrl: siteUrl,
+      discoveredFeeds: const <DiscoverFeedCandidate>[],
+      warnings: const <String>['no autodiscovery links found'],
+    );
+  }
+
+  @override
+  Future<RefreshResult> refreshFeed(String feedId) async {
+    refreshedFeedIds.add(feedId);
+    return super.refreshFeed(feedId);
+  }
+}
+
 class _BookmarkFullTextFailureBackend extends _NoFeedBackend {
   final List<ItemModel> entries = <ItemModel>[];
 
@@ -620,6 +650,31 @@ void main() {
 
     expect(find.text('Quick note'), findsWidgets);
     expect(find.textContaining('1 条内容'), findsWidgets);
+  });
+
+  testWidgets('site discovery fallback refreshes the new subscription',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1600, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final backend = _DiscoveryFallbackBackend();
+
+    await tester.pumpWidget(
+      InfoMatrixApp(backendFactory: () => backend),
+    );
+
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Feed URL 或站点 URL'),
+      'https://example.com',
+    );
+    await tester.pump();
+    await tester.tap(find.widgetWithText(OutlinedButton, '站点发现'));
+    await tester.pumpAndSettle();
+
+    expect(backend.subscribeInputs, <String>['https://example.com']);
+    expect(backend.refreshedFeedIds, <String>['feed-1']);
+    expect(find.textContaining('已改用智能订阅'), findsOneWidget);
   });
 
   testWidgets('bookmark remains saved when full text fetch fails',

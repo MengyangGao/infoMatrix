@@ -1,6 +1,8 @@
 # Objective
 Ship a P0/P1-ready macOS-first InfoMatrix build that works as a local-first RSS reader, read-later queue, and memos tool, while fixing confirmed safety, API-contract, sync, and project hygiene issues.
 
+Continuation objective: close any remaining confirmed RSS acquisition, launch, and refresh regressions found after the first delivery pass, then merge the local delivery branch back to `main`.
+
 # User Value
 Users should be able to install and use the macOS app immediately for the three core workflows: subscribe/read feeds, save webpages for later, and write memos. Apple users should be able to opt into a usable CloudKit sync path without weakening the local-first model.
 
@@ -49,6 +51,10 @@ Users should be able to install and use the macOS app immediately for the three 
    - allow read-later title to be blank so the core can infer it
    - resolve current `flutter analyze` issues that fail the project
 7. Run focused and broad validation across Rust, Apple, and Flutter.
+8. Re-audit RSS acquisition and refresh paths after launch testing:
+   - verify app launch through LaunchServices rather than direct binary execution
+   - ensure every subscription fallback path refreshes newly added feeds consistently
+   - add a Flutter shell regression test for site discovery fallback refresh behavior
 
 # Validation
 - `cargo test --workspace`
@@ -57,6 +63,7 @@ Users should be able to install and use the macOS app immediately for the three 
 - `flutter analyze`
 - `flutter test`
 - Targeted tests for remote-bind/token behavior, `entries?kind`, CloudKit coordinator behavior, and blank-title read-later.
+- Targeted Flutter widget/backend test for discovery fallback subscription refresh.
 
 # Risks
 - Overlooked risk 1: CloudKit entitlements can compile locally but still fail at runtime if the Apple Developer container is not provisioned.
@@ -64,6 +71,7 @@ Users should be able to install and use the macOS app immediately for the three 
 - Overlooked risk 3: CloudKit event replay can surface pre-existing malformed sync events from older local databases; tests need to cover bad or self-origin records without corrupting local state.
 - Flutter analyzer behavior depends on the installed Flutter SDK version, so fixes should target the current warnings without forcing broad UI rewrites.
 - Remote-bind protection must not interfere with normal loopback app/server workflows.
+- Overlooked risk 4: site discovery can fail or return zero candidates for valid feeds; fallback subscription must still refresh the new source so the first-run experience is not an empty feed.
 
 # Rollback Notes
 - If token middleware blocks legitimate local use, restrict enforcement to non-loopback runtime configuration only and keep loopback unauthenticated.
