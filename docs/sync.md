@@ -20,6 +20,7 @@ Sync is a cross-platform architecture boundary, but the first shipped remote bac
   - CloudKit sync coordinator
   - account state, enablement, and retry status
   - local queue upload / remote event pull orchestration
+  - per-device origin IDs so a device does not replay the events it just uploaded
 
 ## Local Event Queue Semantics
 
@@ -40,6 +41,14 @@ Sync is a cross-platform architecture boundary, but the first shipped remote bac
 - `POST /api/v1/sync/events/ack`
   - request body: `{ "event_ids": ["..."] }`
   - response: `{ "acknowledged": <count> }`
+
+## Apple CloudKit Semantics
+
+- CloudKit is opt-in from the Apple shell.
+- Uploaded records use the `InfoMatrixSyncEvent` record type.
+- Each record includes `origin_device_id`, stored locally in `UserDefaults`, so fetches can ignore records produced by the same app installation.
+- Remote event fetches page through the full CloudKit result set and sort events by `created_at`, then event id, before replaying them into SQLite.
+- The generated Xcode app targets include CloudKit entitlements for Release signing. Debug builds stay locally buildable without a provisioning profile. Release builds still require matching iCloud containers in the Apple Developer account.
 
 ## Related Local APIs
 

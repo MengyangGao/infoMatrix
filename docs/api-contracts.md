@@ -171,6 +171,11 @@ Endpoints:
 
 - `GET /api/v1/entries`
   - list unified inbox entries
+  - query parameters:
+    - `filter=all|unread|starred|later|archive`
+    - `kind=article|bookmark|note|quote`
+    - `q=<search text>`
+    - `limit=<count>`
 - `POST /api/v1/entries`
   - input: unified entry payload (`title`, optional `kind`, `source_*`, content fields)
   - output: created entry detail
@@ -205,3 +210,19 @@ FFI equivalents:
 
 - `infomatrix_core_export_opml_json`
 - `infomatrix_core_import_opml_json`
+
+## Local Server Binding and Token Contract
+
+The local HTTP server binds to `127.0.0.1:3199` by default. Non-loopback binds are rejected unless both conditions are true:
+
+- `INFOMATRIX_ALLOW_REMOTE_BIND=1`
+- `INFOMATRIX_API_TOKEN` is set to a non-empty token
+
+When an API token is configured, protected `/api/v1/*` routes require:
+
+- `Authorization: Bearer <INFOMATRIX_API_TOKEN>`
+
+Public health and metadata routes remain available without a token:
+
+- `GET /api/v1/health`
+- `GET /api/v1/meta`

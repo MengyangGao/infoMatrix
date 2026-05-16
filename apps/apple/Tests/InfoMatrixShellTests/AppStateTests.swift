@@ -36,6 +36,9 @@ private actor MockReaderService: ReaderService {
     var groupRefreshSettingsByGroup: [String: RefreshSettings] = [:]
     var pendingNotificationEvents: [NotificationEvent] = []
     var acknowledgedNotificationEventIDs: [String] = []
+    var pendingSyncEvents: [SyncEvent] = []
+    var acknowledgedSyncEventIDs: [String] = []
+    var appliedSyncEvents: [SyncEvent] = []
 
     func listFeeds() async throws -> [Feed] {
         feeds
@@ -462,15 +465,31 @@ private actor MockReaderService: ReaderService {
     }
 
     func listPendingSyncEvents(limit: Int) async throws -> [SyncEvent] {
-        []
+        Array(pendingSyncEvents.prefix(limit))
     }
 
     func acknowledgeSyncEvents(eventIDs: [String]) async throws -> Int {
-        0
+        acknowledgedSyncEventIDs.append(contentsOf: eventIDs)
+        let acknowledged = pendingSyncEvents.filter { eventIDs.contains($0.id) }.count
+        pendingSyncEvents.removeAll { eventIDs.contains($0.id) }
+        return acknowledged
     }
 
     func applySyncEvents(_ events: [SyncEvent]) async throws -> Int {
-        events.count
+        appliedSyncEvents.append(contentsOf: events)
+        return events.count
+    }
+
+    func acknowledgedSyncIDs() async -> [String] {
+        acknowledgedSyncEventIDs
+    }
+
+    func appliedSyncEventIDs() async -> [String] {
+        appliedSyncEvents.map(\.id)
+    }
+
+    func setPendingSyncEvents(_ events: [SyncEvent]) async {
+        pendingSyncEvents = events
     }
 }
 
@@ -478,23 +497,50 @@ private actor MockCloudKitSyncTransport: CloudKitSyncTransport {
     private(set) var accountStatusCallCount = 0
     private(set) var uploadCallCount = 0
     private(set) var fetchCallCount = 0
+    private(set) var uploadedOriginDeviceIDs: [String] = []
+    var remoteEvents: [SyncEvent] = []
 
     func accountStatus() async throws -> CloudKitSyncAccountState {
         accountStatusCallCount += 1
         return .available
     }
 
-    func upload(events: [SyncEvent]) async throws {
+    func upload(events: [SyncEvent], originDeviceID: String) async throws {
         uploadCallCount += events.count
+        uploadedOriginDeviceIDs.append(originDeviceID)
     }
 
-    func fetchRemoteEvents(after date: Date?) async throws -> [SyncEvent] {
+    func fetchRemoteEvents(
+        after date: Date?,
+        excludingOriginDeviceID originDeviceID: String
+    ) async throws -> [SyncEvent] {
         fetchCallCount += 1
-        return []
+        return remoteEvents.sorted { lhs, rhs in
+            if lhs.createdAt != rhs.createdAt {
+                return lhs.createdAt < rhs.createdAt
+            }
+            return lhs.id < rhs.id
+        }
     }
 
     func accountStatusCalls() async -> Int {
         accountStatusCallCount
+    }
+
+    func uploadedOrigins() async -> [String] {
+        uploadedOriginDeviceIDs
+    }
+
+    func uploadCalls() async -> Int {
+        uploadCallCount
+    }
+
+    func fetchCalls() async -> Int {
+        fetchCallCount
+    }
+
+    func setRemoteEvents(_ events: [SyncEvent]) async {
+        remoteEvents = events
     }
 }
 
@@ -671,6 +717,74 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(recorder.callCount, 1)
         let accountStatusCalls = await transport.accountStatusCalls()
         XCTAssertEqual(accountStatusCalls, 1)
+    }
+
+    func testCloudKitCoordinatorUploadsAcksAndAppliesSortedRemoteEvents() async {
+        let service = MockReaderService()
+        await service.setPendingSyncEvents([
+            SyncEvent(
+                id: "local-1",
+                entityType: "entry",
+                entityId: "entry-local",
+                eventType: "created",
+                payloadJson: #"{"title":"Local"}"#,
+                createdAt: "2026-05-16T01:00:00.000Z"
+            )
+        ])
+        let transport = MockCloudKitSyncTransport()
+        await transport.setRemoteEvents([
+            SyncEvent(
+                id: "remote-2",
+                entityType: "entry",
+                entityId: "entry-remote-2",
+                eventType: "created",
+                payloadJson: #"{"title":"Remote 2"}"#,
+                createdAt: "2026-05-16T03:00:00.000Z"
+            ),
+            SyncEvent(
+                id: "remote-1",
+                entityType: "entry",
+                entityId: "entry-remote-1",
+                eventType: "created",
+                payloadJson: #"{"title":"Remote 1"}"#,
+                createdAt: "2026-05-16T02:00:00.000Z"
+            ),
+        ])
+        let recorder = CloudKitFactoryRecorder(transport: transport)
+        let defaultsSuiteName = "InfoMatrixShellTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: defaultsSuiteName)!
+        defer {
+            defaults.removePersistentDomain(forName: defaultsSuiteName)
+        }
+
+        let coordinator = CloudKitSyncCoordinator(
+            service: service,
+            transportFactory: {
+                recorder.makeTransport()
+            },
+            defaults: defaults,
+            lastSyncKey: "cloudkit.last_sync",
+            enabledKey: "cloudkit.enabled",
+            deviceIDKey: "cloudkit.device_id"
+        )
+
+        coordinator.setEnabled(true)
+        await coordinator.syncNow()
+
+        let uploadCalls = await transport.uploadCalls()
+        let fetchCalls = await transport.fetchCalls()
+        let acknowledgedSyncIDs = await service.acknowledgedSyncIDs()
+        let appliedSyncEventIDs = await service.appliedSyncEventIDs()
+        let uploadedOrigins = await transport.uploadedOrigins()
+
+        XCTAssertEqual(uploadCalls, 1)
+        XCTAssertEqual(fetchCalls, 1)
+        XCTAssertEqual(acknowledgedSyncIDs, ["local-1"])
+        XCTAssertEqual(appliedSyncEventIDs, ["remote-1", "remote-2"])
+        XCTAssertEqual(coordinator.status.pendingLocalEventCount, 0)
+        XCTAssertNil(coordinator.status.lastErrorMessage)
+        XCTAssertNotNil(coordinator.status.lastSyncAt)
+        XCTAssertEqual(uploadedOrigins, [defaults.string(forKey: "cloudkit.device_id") ?? ""])
     }
 
     func testLiveAppleSubscriptionSmokeForKnownFeeds() async throws {

@@ -2608,6 +2608,104 @@ mod tests {
     }
 
     #[test]
+    fn refresh_feed_persists_new_items() {
+        let temp = tempfile::NamedTempFile::new().expect("temp db");
+        let db_path = temp.path().to_string_lossy().to_string();
+
+        let initial_body = r#"<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Refresh Fixture</title>
+    <link>https://example.com</link>
+    <description>Refresh fixture feed</description>
+    <item>
+      <title>Initial Item</title>
+      <link>https://example.com/initial</link>
+      <guid>item-1</guid>
+      <description>Initial body</description>
+    </item>
+  </channel>
+</rss>"#;
+        let refreshed_body = r#"<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Refresh Fixture</title>
+    <link>https://example.com</link>
+    <description>Refresh fixture feed</description>
+    <item>
+      <title>Second Item</title>
+      <link>https://example.com/second</link>
+      <guid>item-2</guid>
+      <description>Second body</description>
+    </item>
+    <item>
+      <title>Initial Item</title>
+      <link>https://example.com/initial</link>
+      <guid>item-1</guid>
+      <description>Initial body</description>
+    </item>
+  </channel>
+</rss>"#;
+
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind listener");
+        let port = listener.local_addr().expect("local addr").port();
+        let server_handle = std::thread::spawn(move || {
+            for body in [initial_body, refreshed_body] {
+                if let Ok((mut stream, _)) = listener.accept() {
+                    let mut buffer = [0u8; 2048];
+                    let _ = std::io::Read::read(&mut stream, &mut buffer);
+                    let response = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/rss+xml; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                        body.len(),
+                        body
+                    );
+                    let _ = std::io::Write::write_all(&mut stream, response.as_bytes());
+                    let _ = std::io::Write::flush(&mut stream);
+                }
+            }
+        });
+
+        let feed_url = format!("http://127.0.0.1:{port}/feed.xml");
+        let subscribe_payload = serde_json::json!({
+            "db_path": db_path,
+            "input_url": feed_url
+        });
+        let subscribe_input = CString::new(subscribe_payload.to_string()).expect("cstring");
+        let subscribe_output =
+            unsafe { infomatrix_core_subscribe_input_json(subscribe_input.as_ptr()) };
+        let subscribe_envelope = decode_envelope(subscribe_output);
+        assert_eq!(subscribe_envelope["ok"], true, "subscribe envelope: {subscribe_envelope}");
+        let feed_id = subscribe_envelope["data"]["feed_id"].as_str().expect("feed id").to_owned();
+
+        let refresh_payload = serde_json::json!({
+            "db_path": temp.path().to_string_lossy(),
+            "feed_id": feed_id
+        });
+        let refresh_input = CString::new(refresh_payload.to_string()).expect("cstring");
+        let refresh_output = unsafe { infomatrix_core_refresh_feed_json(refresh_input.as_ptr()) };
+        let refresh_envelope = decode_envelope(refresh_output);
+        assert_eq!(refresh_envelope["ok"], true, "refresh envelope: {refresh_envelope}");
+        assert_eq!(refresh_envelope["data"]["status"], "updated");
+        assert_eq!(refresh_envelope["data"]["item_count"], 2);
+
+        let list_entries_payload = serde_json::json!({
+            "db_path": temp.path().to_string_lossy(),
+            "feed_id": feed_id,
+            "limit": 10
+        });
+        let list_entries_input = CString::new(list_entries_payload.to_string()).expect("cstring");
+        let list_entries_output =
+            unsafe { infomatrix_core_list_entries_json(list_entries_input.as_ptr()) };
+        let list_entries_envelope = decode_envelope(list_entries_output);
+        assert_eq!(list_entries_envelope["ok"], true);
+        let entries = list_entries_envelope["data"].as_array().expect("entries array");
+        assert_eq!(entries.len(), 2);
+        assert!(entries.iter().any(|entry| entry["title"] == "Second Item"));
+
+        let _ = server_handle.join();
+    }
+
+    #[test]
     fn create_entry_captures_webpage_snapshot() {
         let temp = tempfile::NamedTempFile::new().expect("temp db");
         let db_path = temp.path().to_string_lossy().to_string();

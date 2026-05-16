@@ -6,8 +6,9 @@ use std::path::{Path, PathBuf};
 
 use ammonia::Builder as HtmlSanitizerBuilder;
 use app_core::{AppCoreError, InfoMatrixAppCore};
-use axum::extract::{Path as AxumPath, Query, State};
-use axum::http::StatusCode;
+use axum::extract::{Path as AxumPath, Query, Request, State};
+use axum::http::{HeaderMap, StatusCode, header::AUTHORIZATION};
+use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, patch, post};
 use axum::{Json, Router};
@@ -42,6 +43,7 @@ struct AppContext {
     user_agent: String,
     timeout_secs: u64,
     migrate_on_open: bool,
+    api_token: Option<String>,
 }
 
 struct FeedSnapshotFetchMetadata {
@@ -57,12 +59,15 @@ const DISCOVERY_CACHE_TTL_HOURS: i64 = 24;
 struct RuntimeConfig {
     db_path: String,
     bind_addr: SocketAddr,
+    api_token: Option<String>,
 }
 
 #[derive(Debug, thiserror::Error)]
 enum ApiError {
     #[error("bad request: {0}")]
     BadRequest(String),
+    #[error("unauthorized: {0}")]
+    Unauthorized(String),
     #[error("not found: {0}")]
     NotFound(String),
     #[error("internal error: {0}")]
@@ -73,6 +78,7 @@ impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let status = match self {
             Self::BadRequest(_) => StatusCode::BAD_REQUEST,
+            Self::Unauthorized(_) => StatusCode::UNAUTHORIZED,
             Self::NotFound(_) => StatusCode::NOT_FOUND,
             Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
@@ -273,6 +279,7 @@ struct ListAllItemsQuery {
     limit: Option<usize>,
     q: Option<String>,
     filter: Option<String>,
+    kind: Option<EntryKind>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -446,6 +453,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         user_agent: "InfoMatrix/0.1 (+https://github.com/MengyangGao/infoMatrix)".to_owned(),
         timeout_secs: 20,
         migrate_on_open: false,
+        api_token: config.api_token,
     };
     spawn_background_refresh_task(context.clone());
     let app = app_router(context);
@@ -457,9 +465,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn app_router(context: AppContext) -> Router {
-    Router::new()
-        .route("/api/v1/health", get(health))
-        .route("/api/v1/meta", get(meta))
+    let protected_routes = Router::new()
         .route("/api/v1/discover", post(discover_site))
         .route("/api/v1/subscriptions", post(add_subscription))
         .route("/api/v1/subscribe", post(subscribe_input))
@@ -508,7 +514,36 @@ fn app_router(context: AppContext) -> Router {
         .route("/api/v1/sync/events/apply", post(apply_sync_events))
         .route("/api/v1/opml/export", get(export_opml_subscriptions))
         .route("/api/v1/opml/import", post(import_opml_subscriptions))
+        .route_layer(middleware::from_fn_with_state(context.clone(), require_api_token));
+
+    Router::new()
+        .route("/api/v1/health", get(health))
+        .route("/api/v1/meta", get(meta))
+        .merge(protected_routes)
         .with_state(context)
+}
+
+async fn require_api_token(
+    State(context): State<AppContext>,
+    headers: HeaderMap,
+    request: Request,
+    next: Next,
+) -> Result<Response, ApiError> {
+    let Some(expected_token) = context.api_token.as_deref() else {
+        return Ok(next.run(request).await);
+    };
+
+    let expected_header = format!("Bearer {expected_token}");
+    let authorized = headers
+        .get(AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value == expected_header);
+
+    if authorized {
+        Ok(next.run(request).await)
+    } else {
+        Err(ApiError::Unauthorized("missing or invalid API token".to_owned()))
+    }
 }
 
 async fn health() -> Json<HealthResponse> {
@@ -855,7 +890,7 @@ async fn list_all_items(
     let core = open_app_core(&context)?;
     let filter = parse_item_filter(query.filter.as_deref());
     let items = core
-        .search_all_items(query.limit.unwrap_or(200), query.q.as_deref(), filter, None)?
+        .search_all_items(query.limit.unwrap_or(200), query.q.as_deref(), filter, query.kind)?
         .into_iter()
         .map(item_to_view)
         .collect();
@@ -2933,9 +2968,15 @@ fn open_app_core(context: &AppContext) -> Result<InfoMatrixAppCore, ApiError> {
 fn resolve_runtime_config(
     args: impl IntoIterator<Item = String>,
 ) -> Result<RuntimeConfig, Box<dyn std::error::Error>> {
-    let mut db_path = std::env::var("INFOMATRIX_DB_PATH").unwrap_or_else(|_| default_db_path());
-    let mut bind_addr = std::env::var("INFOMATRIX_BIND_ADDR")
-        .ok()
+    resolve_runtime_config_with_env(args, |name| std::env::var(name).ok())
+}
+
+fn resolve_runtime_config_with_env(
+    args: impl IntoIterator<Item = String>,
+    get_env: impl Fn(&str) -> Option<String>,
+) -> Result<RuntimeConfig, Box<dyn std::error::Error>> {
+    let mut db_path = get_env("INFOMATRIX_DB_PATH").unwrap_or_else(default_db_path);
+    let mut bind_addr = get_env("INFOMATRIX_BIND_ADDR")
         .and_then(|value| value.parse::<SocketAddr>().ok())
         .unwrap_or_else(|| SocketAddr::from(([127, 0, 0, 1], 3199)));
 
@@ -2971,7 +3012,18 @@ fn resolve_runtime_config(
         }
     }
 
-    Ok(RuntimeConfig { db_path, bind_addr })
+    let allow_remote_bind = get_env("INFOMATRIX_ALLOW_REMOTE_BIND").as_deref() == Some("1");
+    let api_token = get_env("INFOMATRIX_API_TOKEN").filter(|value| !value.trim().is_empty());
+    if !bind_addr.ip().is_loopback() {
+        if !allow_remote_bind {
+            return Err("non-loopback bind requires INFOMATRIX_ALLOW_REMOTE_BIND=1".into());
+        }
+        if api_token.is_none() {
+            return Err("non-loopback bind requires INFOMATRIX_API_TOKEN".into());
+        }
+    }
+
+    Ok(RuntimeConfig { db_path, bind_addr, api_token })
 }
 
 fn default_db_path() -> String {
@@ -3060,7 +3112,7 @@ mod tests {
     use super::{
         AppContext, app_router, candidate_site_urls, clean_preview_text, confidence_from_score,
         extract_full_content, fallback_candidate_urls, feed_candidate_score, prepare_display_html,
-        resolve_runtime_config,
+        resolve_runtime_config, resolve_runtime_config_with_env,
     };
 
     fn sample_item(feed_id: &str, item_id: &str) -> NormalizedItem {
@@ -3102,6 +3154,7 @@ mod tests {
             user_agent: "test-agent".to_owned(),
             timeout_secs: 3,
             migrate_on_open: true,
+            api_token: None,
         });
 
         let response = app
@@ -3116,6 +3169,58 @@ mod tests {
             .expect("response");
 
         assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn api_token_protects_non_public_routes_when_configured() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let db = dir.path().join("infomatrix.db");
+        let app = app_router(AppContext {
+            db_path: db.to_string_lossy().to_string(),
+            user_agent: "test-agent".to_owned(),
+            timeout_secs: 3,
+            migrate_on_open: true,
+            api_token: Some("secret-token".to_owned()),
+        });
+
+        let health_response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(Method::GET)
+                    .uri("/api/v1/health")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(health_response.status(), StatusCode::OK);
+
+        let unauthorized_response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(Method::GET)
+                    .uri("/api/v1/feeds")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(unauthorized_response.status(), StatusCode::UNAUTHORIZED);
+
+        let authorized_response = app
+            .oneshot(
+                Request::builder()
+                    .method(Method::GET)
+                    .uri("/api/v1/feeds")
+                    .header("authorization", "Bearer secret-token")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(authorized_response.status(), StatusCode::OK);
     }
 
     #[tokio::test]
@@ -3144,6 +3249,7 @@ mod tests {
             user_agent: "test-agent".to_owned(),
             timeout_secs: 3,
             migrate_on_open: true,
+            api_token: None,
         });
 
         let add_response = app
@@ -3182,6 +3288,7 @@ mod tests {
             user_agent: "test-agent".to_owned(),
             timeout_secs: 3,
             migrate_on_open: true,
+            api_token: None,
         });
 
         let response = app
@@ -3226,6 +3333,7 @@ mod tests {
             user_agent: "test-agent".to_owned(),
             timeout_secs: 3,
             migrate_on_open: true,
+            api_token: None,
         });
 
         let response = app
@@ -3312,6 +3420,7 @@ mod tests {
             user_agent: "test-agent".to_owned(),
             timeout_secs: 3,
             migrate_on_open: true,
+            api_token: None,
         });
 
         let response = app
@@ -3360,6 +3469,7 @@ mod tests {
             user_agent: "test-agent".to_owned(),
             timeout_secs: 3,
             migrate_on_open: true,
+            api_token: None,
         });
 
         let create_response = app
@@ -3429,6 +3539,7 @@ mod tests {
             user_agent: "test-agent".to_owned(),
             timeout_secs: 3,
             migrate_on_open: true,
+            api_token: None,
         });
 
         let create_response = app
@@ -3479,6 +3590,42 @@ mod tests {
         assert_eq!(counts["notes"], 1);
         assert_eq!(counts["all"], 1);
 
+        let note_list_response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(Method::GET)
+                    .uri("/api/v1/entries?kind=note")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(note_list_response.status(), StatusCode::OK);
+        let note_list_body =
+            note_list_response.into_body().collect().await.expect("body bytes").to_bytes();
+        let notes: serde_json::Value = serde_json::from_slice(&note_list_body).expect("json");
+        assert_eq!(notes.as_array().expect("notes array").len(), 1);
+        assert_eq!(notes[0]["kind"], "note");
+
+        let bookmark_list_response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(Method::GET)
+                    .uri("/api/v1/entries?kind=bookmark")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(bookmark_list_response.status(), StatusCode::OK);
+        let bookmark_list_body =
+            bookmark_list_response.into_body().collect().await.expect("body bytes").to_bytes();
+        let bookmarks: serde_json::Value =
+            serde_json::from_slice(&bookmark_list_body).expect("json");
+        assert!(bookmarks.as_array().expect("bookmarks array").is_empty());
+
         let detail_response = app
             .clone()
             .oneshot(
@@ -3519,6 +3666,7 @@ mod tests {
             user_agent: "test-agent".to_owned(),
             timeout_secs: 3,
             migrate_on_open: true,
+            api_token: None,
         });
 
         let add_response = app
@@ -3591,6 +3739,7 @@ mod tests {
             user_agent: "test-agent".to_owned(),
             timeout_secs: 3,
             migrate_on_open: true,
+            api_token: None,
         });
 
         let global_settings = GlobalNotificationSettings {
@@ -3771,6 +3920,7 @@ mod tests {
             user_agent: "test-agent".to_owned(),
             timeout_secs: 3,
             migrate_on_open: true,
+            api_token: None,
         });
 
         let patch_response = app
@@ -3867,6 +4017,7 @@ mod tests {
             user_agent: "test-agent".to_owned(),
             timeout_secs: 3,
             migrate_on_open: true,
+            api_token: None,
         });
 
         let opml_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -3954,6 +4105,7 @@ mod tests {
             user_agent: "test-agent".to_owned(),
             timeout_secs: 3,
             migrate_on_open: true,
+            api_token: None,
         });
 
         let response = app
@@ -3997,6 +4149,45 @@ mod tests {
 
         assert_eq!(config.bind_addr.port(), 4321);
         assert_eq!(config.db_path, "/tmp/infomatrix-cli-test.db");
+    }
+
+    #[test]
+    fn runtime_config_rejects_remote_bind_without_explicit_allow() {
+        let result = resolve_runtime_config_with_env(
+            vec!["--bind-addr".to_owned(), "0.0.0.0:3199".to_owned()],
+            |_| None,
+        );
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn runtime_config_rejects_remote_bind_without_token() {
+        let result = resolve_runtime_config_with_env(
+            vec!["--bind-addr".to_owned(), "0.0.0.0:3199".to_owned()],
+            |name| match name {
+                "INFOMATRIX_ALLOW_REMOTE_BIND" => Some("1".to_owned()),
+                _ => None,
+            },
+        );
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn runtime_config_accepts_remote_bind_with_allow_and_token() {
+        let config = resolve_runtime_config_with_env(
+            vec!["--bind-addr".to_owned(), "0.0.0.0:3199".to_owned()],
+            |name| match name {
+                "INFOMATRIX_ALLOW_REMOTE_BIND" => Some("1".to_owned()),
+                "INFOMATRIX_API_TOKEN" => Some("secret".to_owned()),
+                _ => None,
+            },
+        )
+        .expect("resolve config");
+
+        assert!(!config.bind_addr.ip().is_loopback());
+        assert_eq!(config.api_token.as_deref(), Some("secret"));
     }
 
     #[test]

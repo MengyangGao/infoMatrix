@@ -1,60 +1,71 @@
 # Objective
-Diagnose the macOS "opens then quits" report and fix serious launch/distribution bugs that can make the packaged macOS app behave differently from local builds.
+Ship a P0/P1-ready macOS-first InfoMatrix build that works as a local-first RSS reader, read-later queue, and memos tool, while fixing confirmed safety, API-contract, sync, and project hygiene issues.
 
 # User Value
-Users should be able to launch the macOS app from the generated app/ZIP/DMG with predictable behavior, and release scripts should clearly fail or warn when they produce an artifact that is not suitable for end-user distribution.
+Users should be able to install and use the macOS app immediately for the three core workflows: subscribe/read feeds, save webpages for later, and write memos. Apple users should be able to opt into a usable CloudKit sync path without weakening the local-first model.
 
 # Constraints
-- Preserve the local-first architecture and keep networking/parsing out of SwiftUI views.
-- Do not add dependencies.
+- Preserve the local-first architecture and keep networking, parsing, persistence, and sync plumbing out of SwiftUI views.
+- Rust remains the owner of discovery, parsing, fetching, persistence, icons, and sync-ready event state.
+- Do not add new dependencies unless a blocker appears.
 - Do not push or publish artifacts without explicit approval.
-- Keep changes focused on macOS launch and packaging correctness.
+- Keep Windows, Linux, Android, and Flutter behavior from regressing while prioritizing macOS.
 
 # Assumptions
-- [ASSUMPTION] The reported flash crash happens from an app bundle, ZIP, or DMG artifact rather than by running `Contents/MacOS/InfoMatrix-macOS` directly.
-- [ASSUMPTION] A locally reproducible LaunchServices crash is not currently present on this machine; Debug, Release, `dist/InfoMatrix.app`, and the mounted DMG app stayed running.
-- [ASSUMPTION] We should still fix release-path mismatches because they can explain user-only behavior.
+- [ASSUMPTION] This round treats "all vulnerabilities" as confirmed P0/P1 issues that affect startup, data safety, local API exposure, sync correctness, or the three core product workflows.
+- [ASSUMPTION] CloudKit sync is Apple-only for this round; no new cross-platform remote sync service is introduced.
+- [ASSUMPTION] Apple Developer account setup will provide matching iCloud containers for release signing.
 
 # Affected Files
 - `plan.md`
+- `core/crates/app_server/src/main.rs`
+- `docs/api-contracts.md`
+- `docs/sync.md`
+- `apps/apple/Shared/CloudKitSyncManager.swift`
 - `apps/apple/XcodeGen/project.yml`
-- `tooling/scripts/package_macos_release.sh`
-- `tooling/scripts/package_flutter_linux_release.sh`
-- `core/Cargo.toml`
-- `core/Cargo.lock`
-- `apps/flutter/pubspec.yaml`
-- `apps/apple/macOS/XcodeApp/MacApp.swift`
+- `apps/apple/Entitlements/*.entitlements`
+- `apps/apple/Tests/InfoMatrixShellTests/AppStateTests.swift`
+- `apps/flutter/lib/app.dart`
+- `apps/flutter/lib/ui/reader_shell_page.dart`
+- `apps/flutter/test/widget_test.dart`
 
 # Steps
-1. Record the macOS crash investigation plan before edits.
-2. Align the generated Xcode macOS target with the maintained SwiftPM macOS entrypoint so packaged Release builds use the same AppDelegate/window activation path.
-3. Remove the stale Xcode-only macOS entrypoint to prevent future divergence.
-4. Harden the macOS packaging script:
-   - support direct `xcodegen` when `mint` is not installed
-   - verify code signatures after signing
-   - make Gatekeeper assessment explicit
-   - warn loudly for ad-hoc local-test artifacts
-   - fail Gatekeeper validation when a signed/notarized release is requested
-   - copy the staged app into the DMG with `ditto` instead of `cp -R`
-5. Regenerate/build the macOS Xcode target and verify the resulting app launches through `open`.
-6. Verify existing release diagnostics: `codesign`, `spctl`, ZIP/DMG checks where applicable.
-7. Bump downloadable artifact defaults from `0.1.0` to `0.1.1` before pushing the release-path fixes.
+1. Record this P0/P1 delivery plan before broad edits.
+2. Harden the local HTTP server:
+   - keep loopback as the default bind target
+   - reject non-loopback binds unless `INFOMATRIX_ALLOW_REMOTE_BIND=1`
+   - require `INFOMATRIX_API_TOKEN` for non-loopback binds
+   - require `Authorization: Bearer <token>` for protected `/api/v1/*` routes when a token is configured
+3. Fix the HTTP entries contract so `GET /api/v1/entries?kind=note|bookmark|article|quote` filters correctly, and document it.
+4. Make Apple CloudKit sync usable:
+   - add CloudKit entitlements for Apple app targets
+   - tag uploaded records with an origin device id
+   - filter local-origin records when fetching remote events
+   - fetch all pages and sort remote events deterministically by `created_at`
+   - refresh pending counts and sync status after sync attempts
+5. Tighten the macOS three-in-one workflow by preserving current RSS, read-later, and memo flows and adding tests around the sync and entry filtering behavior.
+6. Fix Flutter project hygiene:
+   - remove the fake feed URL prefill
+   - allow read-later title to be blank so the core can infer it
+   - resolve current `flutter analyze` issues that fail the project
+7. Run focused and broad validation across Rust, Apple, and Flutter.
 
 # Validation
-- `xcodebuild -project apps/apple/XcodeGen/InfoMatrix.xcodeproj -scheme InfoMatrix-macOS -configuration Debug -destination "platform=macOS" ... build`
-- `xcodebuild -project apps/apple/XcodeGen/InfoMatrix.xcodeproj -scheme InfoMatrix-macOS -configuration Release -destination "platform=macOS" ... build`
-- `open -n -W <built app>`
-- `codesign --verify --deep --strict --verbose=2 <app>`
-- `spctl --assess --type execute --verbose <app>` as a diagnostic, with ad-hoc failures treated as expected for local artifacts.
-- `cargo check --workspace`
+- `cargo test --workspace`
+- `cargo clippy --workspace --all-targets -- -D warnings`
+- `swift test`
+- `flutter analyze`
+- `flutter test`
+- Targeted tests for remote-bind/token behavior, `entries?kind`, CloudKit coordinator behavior, and blank-title read-later.
 
 # Risks
-- Overlooked risk 1: the user's real crash may be caused by their local `~/.infomatrix/infomatrix.db`, which this machine does not reproduce.
-- Overlooked risk 2: Gatekeeper/quarantine failures may look like "flash crash" to users but do not always create `.ips` crash reports.
-- Overlooked risk 3: direct executable launch crashes are real for development workflows but are not the same path as Finder/`open` launching an `.app`.
-- Switching XcodeGen to the shared macOS entrypoint must avoid compiling two `@main` types in the same target.
-- Gatekeeper validation behavior differs between ad-hoc local builds and Developer ID notarized builds.
+- Overlooked risk 1: CloudKit entitlements can compile locally but still fail at runtime if the Apple Developer container is not provisioned.
+- Overlooked risk 2: adding token enforcement to remote-bound local API servers may break ad hoc scripts that intentionally bind externally without a token.
+- Overlooked risk 3: CloudKit event replay can surface pre-existing malformed sync events from older local databases; tests need to cover bad or self-origin records without corrupting local state.
+- Flutter analyzer behavior depends on the installed Flutter SDK version, so fixes should target the current warnings without forcing broad UI rewrites.
+- Remote-bind protection must not interfere with normal loopback app/server workflows.
 
 # Rollback Notes
-- If the Xcode target fails because of package/import differences, revert the source path change and instead move the shared app delegate code into a common file without `@main`.
-- If stricter packaging checks block local development, keep signature verification but limit Gatekeeper failure to `INFOMATRIX_REQUIRE_SIGNED_RELEASE=1` or `INFOMATRIX_REQUIRE_NOTARIZED_RELEASE=1`.
+- If token middleware blocks legitimate local use, restrict enforcement to non-loopback runtime configuration only and keep loopback unauthenticated.
+- If CloudKit entitlements break unsigned local builds, keep the files but gate code signing settings by configuration or target.
+- If CloudKit paging APIs are unavailable on the local SDK, retain origin tagging and deterministic sorting while falling back to the SDK-supported query API shape.

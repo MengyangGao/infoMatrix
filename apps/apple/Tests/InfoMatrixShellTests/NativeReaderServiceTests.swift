@@ -48,6 +48,22 @@ final class NativeReaderServiceTests: XCTestCase {
         XCTAssertNil(payload["id"] as Any?)
     }
 
+    func testDefaultDBPathHonorsEnvironmentOverride() {
+        let key = "INFOMATRIX_DB_PATH"
+        let oldValue = getenv(key).map { String(cString: $0) }
+        let override = "/tmp/infomatrix-env-override.db"
+        setenv(key, override, 1)
+        defer {
+            if let oldValue {
+                setenv(key, oldValue, 1)
+            } else {
+                unsetenv(key)
+            }
+        }
+
+        XCTAssertEqual(NativeReaderService.defaultDBPath(), override)
+    }
+
     func testNotificationSettingsPayloadWrapsSettings() throws {
         let digestPolicy = DigestPolicy(enabled: true, intervalMinutes: 120, maxItems: 7)
         let quietHours = QuietHours(enabled: true, startMinute: 22 * 60, endMinute: 7 * 60)

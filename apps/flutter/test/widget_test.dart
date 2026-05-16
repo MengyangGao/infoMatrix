@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:infomatrix_shell/app.dart';
 import 'package:infomatrix_shell/core/models.dart';
 import 'package:infomatrix_shell/core/reader_presentation.dart';
@@ -108,7 +106,7 @@ class _FakeBackend implements ReaderBackend {
         title: 'Example Feed',
         feedUrl: 'https://example.com/feed.xml',
         feedType: 'rss',
-        groups: const <FeedGroupModel>[
+        groups: <FeedGroupModel>[
           FeedGroupModel(id: 'group-1', name: 'Tech'),
         ],
       ),
@@ -457,7 +455,7 @@ class _BookmarkFullTextFailureBackend extends _NoFeedBackend {
   }) async {
     final item = ItemModel(
       id: id ?? 'bookmark-1',
-      title: title,
+      title: title.trim().isEmpty ? 'Saved Article' : title,
       kind: kind ?? 'bookmark',
       sourceKind: sourceKind ?? 'web',
       sourceID: sourceID,
@@ -643,7 +641,6 @@ void main() {
       matching: find.byType(TextField),
     );
     await tester.enterText(dialogFields.at(0), 'https://example.com/saved');
-    await tester.enterText(dialogFields.at(1), 'Saved Article');
     await tester.pump();
     await tester.tap(find.descendant(
       of: find.byType(Dialog),

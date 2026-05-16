@@ -25,7 +25,6 @@ class InfoMatrixApp extends StatelessWidget {
       surface: const Color(0xFFFFFCF8),
       surfaceContainerHighest: const Color(0xFFF4EDE3),
       surfaceContainer: const Color(0xFFF7F1E8),
-      background: const Color(0xFFF7F2E9),
       onPrimary: Colors.white,
     );
 
@@ -48,13 +47,13 @@ class InfoMatrixApp extends StatelessWidget {
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(22),
-            side:
-                BorderSide(color: colorScheme.outlineVariant.withOpacity(0.35)),
+            side: BorderSide(
+                color: colorScheme.outlineVariant.withValues(alpha: 0.35)),
           ),
         ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
-          fillColor: Colors.white.withOpacity(0.82),
+          fillColor: Colors.white.withValues(alpha: 0.82),
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           border: OutlineInputBorder(

@@ -21,8 +21,7 @@ class ReaderShellPage extends StatefulWidget {
 }
 
 class _ReaderShellPageState extends State<ReaderShellPage> {
-  final TextEditingController _urlController =
-      TextEditingController(text: 'https://example.com/feed.xml');
+  final TextEditingController _urlController = TextEditingController();
   final TextEditingController _searchController = TextEditingController();
 
   List<FeedModel> _feeds = const <FeedModel>[];
@@ -327,9 +326,9 @@ class _ReaderShellPageState extends State<ReaderShellPage> {
           _statusText = '分类刷新失败: ${errors.first}';
         } else if (errors.isNotEmpty) {
           _statusText =
-              '已刷新 ${refreshedCount} 个分类订阅，共 $totalItemCount 条条目，${errors.first}';
+              '已刷新 $refreshedCount 个分类订阅，共 $totalItemCount 条条目，${errors.first}';
         } else {
-          _statusText = '已刷新 ${refreshedCount} 个分类订阅，共 $totalItemCount 条条目';
+          _statusText = '已刷新 $refreshedCount 个分类订阅，共 $totalItemCount 条条目';
         }
       } else {
         final result = await widget.backend.refreshDueFeeds();
@@ -432,11 +431,11 @@ class _ReaderShellPageState extends State<ReaderShellPage> {
             ),
             FilledButton(
               onPressed: () async {
+                final navigator = Navigator.of(context);
                 await Clipboard.setData(ClipboardData(text: result.opmlXml));
-                if (mounted) {
-                  Navigator.of(context).pop();
-                  _showSnack('OPML 已复制到剪贴板');
-                }
+                if (!context.mounted) return;
+                navigator.pop();
+                _showSnack('OPML 已复制到剪贴板');
               },
               child: const Text('复制'),
             ),
@@ -956,7 +955,7 @@ class _ReaderShellPageState extends State<ReaderShellPage> {
     final result = await showDialog<Object>(
       context: context,
       builder: (context) => _NotificationSettingsDialog.global(
-        initialGlobalSettings: settings!,
+        globalSettings: settings!,
       ),
     );
     if (result is! GlobalNotificationSettings) {
@@ -1157,34 +1156,6 @@ class _ReaderShellPageState extends State<ReaderShellPage> {
       context: context,
       builder: (context) => NotificationCenterDialog(backend: widget.backend),
     );
-  }
-
-  String _plainTextFromHtml(String html) {
-    final withoutTags = html.replaceAll(RegExp(r'<[^>]+>'), ' ');
-    return withoutTags
-        .split(RegExp(r'\s+'))
-        .where((part) => part.isNotEmpty)
-        .join(' ');
-  }
-
-  String _entryBodyText(ItemModel item) {
-    final contentText = item.contentText?.trim();
-    if (contentText != null && contentText.isNotEmpty) {
-      return contentText;
-    }
-    final contentHTML = item.contentHTML?.trim();
-    if (contentHTML != null && contentHTML.isNotEmpty) {
-      return _plainTextFromHtml(contentHTML);
-    }
-    final summary = item.summary?.trim();
-    if (summary != null && summary.isNotEmpty) {
-      return summary;
-    }
-    final preview = item.summaryPreview?.trim();
-    if (preview != null && preview.isNotEmpty) {
-      return preview;
-    }
-    return '该条目暂无正文内容';
   }
 
   Future<void> _runBusy(Future<void> Function() action) async {
@@ -1500,7 +1471,10 @@ class _ReaderShellPageState extends State<ReaderShellPage> {
         color: Theme.of(context).colorScheme.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: Theme.of(context).colorScheme.outlineVariant.withOpacity(0.45),
+          color: Theme.of(context)
+              .colorScheme
+              .outlineVariant
+              .withValues(alpha: 0.45),
         ),
       ),
       padding: const EdgeInsets.all(10),
@@ -1571,7 +1545,10 @@ class _ReaderShellPageState extends State<ReaderShellPage> {
         color: Theme.of(context).colorScheme.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: Theme.of(context).colorScheme.outlineVariant.withOpacity(0.45),
+          color: Theme.of(context)
+              .colorScheme
+              .outlineVariant
+              .withValues(alpha: 0.45),
         ),
       ),
       padding: const EdgeInsets.all(10),
@@ -1638,7 +1615,10 @@ class _ReaderShellPageState extends State<ReaderShellPage> {
         color: Theme.of(context).colorScheme.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: Theme.of(context).colorScheme.outlineVariant.withOpacity(0.45),
+          color: Theme.of(context)
+              .colorScheme
+              .outlineVariant
+              .withValues(alpha: 0.45),
         ),
       ),
       padding: const EdgeInsets.all(12),
@@ -1904,7 +1884,7 @@ class _FeedCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final surface = selected
-        ? colorScheme.primaryContainer.withOpacity(0.45)
+        ? colorScheme.primaryContainer.withValues(alpha: 0.45)
         : colorScheme.surface;
 
     return Material(
@@ -1920,8 +1900,8 @@ class _FeedCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: selected
-                  ? colorScheme.primary.withOpacity(0.30)
-                  : colorScheme.outlineVariant.withOpacity(0.32),
+                  ? colorScheme.primary.withValues(alpha: 0.30)
+                  : colorScheme.outlineVariant.withValues(alpha: 0.32),
             ),
           ),
           child: Row(
@@ -1932,8 +1912,8 @@ class _FeedCard extends StatelessWidget {
                 height: 32,
                 decoration: BoxDecoration(
                   color: selected
-                      ? colorScheme.primary.withOpacity(0.14)
-                      : colorScheme.primaryContainer.withOpacity(0.55),
+                      ? colorScheme.primary.withValues(alpha: 0.14)
+                      : colorScheme.primaryContainer.withValues(alpha: 0.55),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 alignment: Alignment.center,
@@ -2080,7 +2060,7 @@ class _ItemCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final surface = selected
-        ? colorScheme.primaryContainer.withOpacity(0.42)
+        ? colorScheme.primaryContainer.withValues(alpha: 0.42)
         : colorScheme.surface;
 
     return Material(
@@ -2096,8 +2076,8 @@ class _ItemCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: selected
-                  ? colorScheme.primary.withOpacity(0.30)
-                  : colorScheme.outlineVariant.withOpacity(0.32),
+                  ? colorScheme.primary.withValues(alpha: 0.30)
+                  : colorScheme.outlineVariant.withValues(alpha: 0.32),
             ),
           ),
           child: Row(
@@ -2216,7 +2196,7 @@ class _Badge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest.withOpacity(0.72),
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.72),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
@@ -2239,11 +2219,11 @@ class _NotificationSettingsDialog extends StatefulWidget {
         initialGlobalSettings = null;
 
   _NotificationSettingsDialog.global({
-    required GlobalNotificationSettings initialGlobalSettings,
+    required GlobalNotificationSettings globalSettings,
   })  : globalMode = true,
         title = '全局通知设置',
-        initialSettings = initialGlobalSettings.defaultFeedSettings,
-        initialGlobalSettings = initialGlobalSettings;
+        initialSettings = globalSettings.defaultFeedSettings,
+        initialGlobalSettings = globalSettings;
 
   final bool globalMode;
   final String title;
@@ -2339,9 +2319,8 @@ class _NotificationSettingsDialogState
 
   @override
   Widget build(BuildContext context) {
-    final title = widget.globalMode ? widget.title : widget.title;
     return AlertDialog(
-      title: Text(title),
+      title: Text(widget.title),
       content: SizedBox(
         width: 760,
         child: SingleChildScrollView(
@@ -2428,7 +2407,7 @@ class _NotificationSettingsDialogState
                 title: const Text('启用通知'),
               ),
               DropdownButtonFormField<NotificationMode>(
-                value: _mode,
+                initialValue: _mode,
                 decoration: const InputDecoration(labelText: '通知模式'),
                 items: const <DropdownMenuItem<NotificationMode>>[
                   DropdownMenuItem(
@@ -3026,7 +3005,7 @@ class _FeedEditDialogState extends State<_FeedEditDialog> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String?>(
-                value: _selectedGroupId,
+                initialValue: _selectedGroupId,
                 decoration: const InputDecoration(
                   labelText: '分类',
                 ),
@@ -3195,7 +3174,7 @@ class _ScopeTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final surface = selected
-        ? colorScheme.primaryContainer.withOpacity(0.45)
+        ? colorScheme.primaryContainer.withValues(alpha: 0.45)
         : colorScheme.surface;
 
     return Padding(
@@ -3213,8 +3192,8 @@ class _ScopeTile extends StatelessWidget {
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
                 color: selected
-                    ? colorScheme.primary.withOpacity(0.30)
-                    : colorScheme.outlineVariant.withOpacity(0.32),
+                    ? colorScheme.primary.withValues(alpha: 0.30)
+                    : colorScheme.outlineVariant.withValues(alpha: 0.32),
               ),
             ),
             child: Row(
@@ -3303,9 +3282,6 @@ class _EntryComposerSheet extends StatefulWidget {
   const _EntryComposerSheet({required this.kind});
 
   final _EntryComposerKind kind;
-
-  const _EntryComposerSheet.bookmark() : kind = _EntryComposerKind.bookmark;
-  const _EntryComposerSheet.note() : kind = _EntryComposerKind.note;
 
   @override
   State<_EntryComposerSheet> createState() => _EntryComposerSheetState();
@@ -3409,8 +3385,7 @@ class _EntryComposerSheetState extends State<_EntryComposerSheet> {
 
   bool get _isSaveDisabled {
     if (widget.kind == _EntryComposerKind.bookmark) {
-      return _urlController.text.trim().isEmpty ||
-          _titleController.text.trim().isEmpty;
+      return _urlController.text.trim().isEmpty;
     }
     return _noteController.text.trim().isEmpty;
   }

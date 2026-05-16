@@ -108,6 +108,11 @@ public final class NativeReaderService: ReaderService, @unchecked Sendable {
     }
 
     public static func defaultDBPath() -> String? {
+        if let override = ProcessInfo.processInfo.environment["INFOMATRIX_DB_PATH"],
+           !override.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return override
+        }
+
         guard let resultPtr = infomatrix_core_default_db_path_json() else {
             return nil
         }
