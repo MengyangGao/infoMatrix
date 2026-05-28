@@ -20,7 +20,9 @@ resolver = "2"
 version = "0.1.1"
 edition = "2024"
 license = "MIT"
-authors = ["InfoMatrix Contributors"]
+authors = ["Mengyang Gao <gao.mengyang@outlook.com>"]
+repository = "https://github.com/MengyangGao/infoMatrix"
+homepage = "https://github.com/MengyangGao/infoMatrix"
 
 [workspace.dependencies]
 anyhow = "1"

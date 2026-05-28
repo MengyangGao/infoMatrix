@@ -5,7 +5,7 @@
   <img src="https://img.shields.io/badge/rust-core-ff6f00?logo=rust&logoColor=white" alt="Rust core">
   <img src="https://img.shields.io/badge/swiftui-Apple%20shell-0D96F6?logo=swift&logoColor=white" alt="SwiftUI shell">
   <img src="https://img.shields.io/badge/flutter-shell-02569B?logo=flutter&logoColor=white" alt="Flutter shell">
-  <img src="https://img.shields.io/badge/platform-macOS%20%2F%20Windows%20%2F%20Linux%20%2F%20Android-111827" alt="Supported platforms">
+  <img src="https://img.shields.io/badge/platform-macOS%20%2F%20iOS-111827" alt="Supported platforms">
 </p>
 
 <p align="center">
@@ -29,21 +29,25 @@ Flutter powers the Windows, Linux, and Android shell through the same Rust core 
 
 ## Download Releases
 
-Pre-built release artifacts are published through GitHub Releases:
+Pre-built release artifacts are published through [GitHub Releases](https://github.com/MengyangGao/infoMatrix/releases).
 
-- [InfoMatrix Releases](https://github.com/MengyangGao/infoMatrix/releases)
-- macOS users can also install through Homebrew:
-  - `brew tap MengyangGao/infomatrix https://github.com/MengyangGao/infoMatrix`
-  - `brew install --cask infomatrix`
+**macOS** users can install via Homebrew:
 
-Recommended packages by platform:
+```bash
+brew tap MengyangGao/infomatrix https://github.com/MengyangGao/infoMatrix
+brew install --cask infomatrix
+```
 
-- macOS: `InfoMatrix-macos.dmg` for normal installation, or `InfoMatrix-macos.zip` for manual distribution
-- Windows: `InfoMatrix-windows-x64.msix` for normal installation, or `InfoMatrix-windows-x64.zip` for manual unpacking
-- Linux: `InfoMatrix-linux-x64.deb`
-- iOS simulator: `InfoMatrix-iOS-simulator.zip`
+Or download manually:
 
-Android packaging remains available for manual smoke builds and store preparation, but it is not published as part of tagged GitHub Releases. Tagged releases publish macOS, Windows, Linux, and iOS simulator bundles; Apple device `.ipa` output stays in the signing-dependent workflow path for later TestFlight or App Store Connect preparation. The release page includes the checksum files for every published platform bundle.
+| Platform | Primary | Fallback |
+|----------|---------|----------|
+| macOS | `InfoMatrix-macos.dmg` | `InfoMatrix-macos.zip` |
+| iOS Simulator | `InfoMatrix-iOS-simulator.zip` | — |
+
+Each release includes `SHA256SUMS` files for artifact verification.
+
+> **Note:** Windows, Linux, and Android builds exist in the source tree but are not published as part of tagged releases at this time.
 
 ## What You Can Do
 
@@ -130,11 +134,19 @@ Apple shell:
 
 <img src="assets/README/macos-main.png" alt="InfoMatrix macOS shell" />
 
-The Flutter shell shares the same Rust core contract on Windows, Linux, and Android. Platform-specific screenshots will be added as those release builds are captured.
+## System Requirements
 
-## Release Readiness
+- **macOS**: macOS 14 Sonoma or later, Apple Silicon or Intel
+- **iOS**: iOS 17 or later (simulator builds available for development)
 
-- Core behavior is covered by Rust workspace tests.
-- Apple and Flutter shells should stay aligned to the same Rust-backed service contracts.
-- Release notes, target notes, and packaging details live in `docs/` and the app-specific README files.
-- Before shipping, run the workspace tests and the relevant platform smoke checks for the target shell.
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow and local checks.
+
+## Security
+
+See [SECURITY.md](SECURITY.md) for the security policy and vulnerability reporting process.
+
+## License
+
+InfoMatrix is released under the [MIT License](LICENSE).
