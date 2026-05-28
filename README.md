@@ -49,6 +49,17 @@ Each release includes `SHA256SUMS` files for artifact verification.
 
 > **Note:** Windows, Linux, and Android builds exist in the source tree but are not published as part of tagged releases at this time.
 
+### Opening on macOS (unsigned builds)
+
+If you see **"InfoMatrix cannot be opened because the developer cannot be verified"**, this is expected for pre-release builds that are not yet signed with an Apple Developer ID certificate. To open the app:
+
+1. Drag `InfoMatrix.app` into your **Applications** folder.
+2. Open **System Settings → Privacy & Security**.
+3. Scroll down to the **Security** section and click **"Open Anyway"** next to the InfoMatrix block message.
+4. Confirm when prompted.
+
+You only need to do this once. After the first launch, the app opens normally.
+
 ## What You Can Do
 
 - Subscribe to feeds by pasting a feed URL or a website URL.
