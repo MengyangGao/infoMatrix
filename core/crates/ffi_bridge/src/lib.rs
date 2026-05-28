@@ -2,6 +2,7 @@
 
 use std::ffi::{CStr, CString, c_char};
 use std::path::Path;
+use std::sync::LazyLock;
 
 use ammonia::Builder as HtmlSanitizerBuilder;
 use app_core::InfoMatrixAppCore;
@@ -29,6 +30,13 @@ use url::Url;
 
 const DEFAULT_TIMEOUT_SECS: u64 = 20;
 const USER_AGENT: &str = "InfoMatrix/0.1 (+https://github.com/MengyangGao/infoMatrix)";
+
+static TOKIO_RUNTIME: LazyLock<tokio::runtime::Runtime> = LazyLock::new(|| {
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("Failed to create Tokio runtime")
+});
 
 #[derive(Debug, Serialize)]
 struct FfiEnvelope<T> {
@@ -572,12 +580,9 @@ pub unsafe extern "C" fn infomatrix_core_add_subscription_json(
             Url::parse(&payload.feed_url).map_err(|err| format!("invalid feed url: {err}"))?;
         enforce_web_url(&feed_url, "feed url")?;
         let title_fallback = payload.title.clone();
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|err| format!("failed to create tokio runtime: {err}"))?;
+        let runtime = &*TOKIO_RUNTIME;
 
-        if let Some(direct_probe) = probe_direct_feed(&runtime, &feed_url)? {
+        if let Some(direct_probe) = probe_direct_feed(runtime, &feed_url)? {
             let mut storage = open_storage(&payload.db_path)?;
             let site_url_for_icon = direct_probe
                 .parsed
@@ -627,12 +632,9 @@ pub unsafe extern "C" fn infomatrix_core_subscribe_input_json(input: *const c_ch
             Url::parse(&normalized_input).map_err(|err| format!("invalid input url: {err}"))?;
         enforce_web_url(&parsed_input, "input url")?;
 
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|err| format!("failed to create tokio runtime: {err}"))?;
+        let runtime = &*TOKIO_RUNTIME;
 
-        if let Some(direct_probe) = probe_direct_feed(&runtime, &parsed_input)? {
+        if let Some(direct_probe) = probe_direct_feed(runtime, &parsed_input)? {
             let mut storage = open_storage(&payload.db_path)?;
             let site_url_fallback = derive_site_url_from_feed(&direct_probe.response.final_url);
             let feed_id = persist_parsed_feed_snapshot(
@@ -702,10 +704,7 @@ pub unsafe extern "C" fn infomatrix_core_discover_site_json(input: *const c_char
             .map_err(|err| format!("failed to initialize discovery client: {err}"))?;
         let service = DiscoveryService::new(client);
 
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|err| format!("failed to create tokio runtime: {err}"))?;
+        let runtime = &*TOKIO_RUNTIME;
 
         let discovered =
             runtime.block_on(service.discover(&payload.site_url)).map_err(|err| err.to_string())?;
@@ -841,11 +840,8 @@ pub unsafe extern "C" fn infomatrix_core_import_opml_json(input: *const c_char) 
 pub unsafe extern "C" fn infomatrix_core_refresh_feed_json(input: *const c_char) -> *mut c_char {
     match with_input::<RefreshInput, _>(input, |payload| {
         let mut storage = open_storage(&payload.db_path)?;
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|err| format!("failed to create tokio runtime: {err}"))?;
-        refresh_feed_with_runtime(&runtime, &mut storage, &payload.feed_id)
+        let runtime = &*TOKIO_RUNTIME;
+        refresh_feed_with_runtime(runtime, &mut storage, &payload.feed_id)
     }) {
         Ok(ptr) => ptr,
         Err(ptr) => ptr,
@@ -861,10 +857,7 @@ pub unsafe extern "C" fn infomatrix_core_refresh_feed_json(input: *const c_char)
 pub unsafe extern "C" fn infomatrix_core_refresh_due_json(input: *const c_char) -> *mut c_char {
     match with_input::<RefreshDueInput, _>(input, |payload| {
         let mut storage = open_storage(&payload.db_path)?;
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|err| format!("failed to create tokio runtime: {err}"))?;
+        let runtime = &*TOKIO_RUNTIME;
         let due_feeds = storage
             .list_due_feeds(payload.limit.unwrap_or(20).clamp(1, 100))
             .map_err(|err| err.to_string())?;
@@ -873,7 +866,7 @@ pub unsafe extern "C" fn infomatrix_core_refresh_due_json(input: *const c_char) 
         let mut total_item_count = 0usize;
 
         for feed in due_feeds {
-            let result = refresh_feed_with_runtime(&runtime, &mut storage, &feed.id)?;
+            let result = refresh_feed_with_runtime(runtime, &mut storage, &feed.id)?;
             refreshed_count = refreshed_count.saturating_add(1);
             total_item_count = total_item_count.saturating_add(result.item_count);
         }
@@ -1309,14 +1302,11 @@ pub unsafe extern "C" fn infomatrix_core_create_entry_json(input: *const c_char)
                 },
             );
         let is_web_capture = source_url.is_some() || matches!(kind, models::EntryKind::Bookmark);
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|err| format!("failed to create tokio runtime: {err}"))?;
+        let runtime = &*TOKIO_RUNTIME;
         let fallback_source_title = source_url.as_ref().and_then(webpage_fallback_title);
         let webpage_capture = if is_web_capture {
             if let Some(source_url) = source_url.as_ref() {
-                capture_webpage_snapshot(&runtime, source_url).ok()
+                capture_webpage_snapshot(runtime, source_url).ok()
             } else {
                 None
             }
@@ -1418,10 +1408,7 @@ pub unsafe extern "C" fn infomatrix_core_fetch_fulltext_json(input: *const c_cha
             .ok_or_else(|| "entry has no source url for fulltext".to_owned())?;
         enforce_web_url(&candidate_url, "entry url")?;
 
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|err| format!("failed to create tokio runtime: {err}"))?;
+        let runtime = &*TOKIO_RUNTIME;
         let client = ReqwestFeedClient::new(DEFAULT_TIMEOUT_SECS, USER_AGENT)
             .map_err(|err| format!("failed to initialize fetch client: {err}"))?;
         let request = FetchRequest { url: candidate_url.clone(), etag: None, last_modified: None };

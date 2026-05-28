@@ -1,0 +1,98 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Rust fmt
+        run: cargo fmt --check
+        working-directory: core
+
+      - name: Rust clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+        working-directory: core
+
+      - name: Rust tests
+        run: cargo test --workspace
+        working-directory: core
+
+  flutter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build Flutter FFI (Linux)
+        run: tooling/scripts/build_flutter_ffi.sh x86_64-unknown-linux-gnu debug
+
+      - name: Flutter analyze
+        run: flutter analyze
+        working-directory: apps/flutter
+
+      - name: Flutter tests
+        run: flutter test
+        working-directory: apps/flutter
+
+  apple-shell-tests:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select latest stable Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Mint
+        run: brew install mint
+
+      - name: Install XcodeGen
+        run: mint install yonaskolb/XcodeGen
+
+      - name: Add XcodeGen to PATH
+        run: echo "/opt/homebrew/bin" >> $GITHUB_PATH
+
+      - name: Build Apple XCFramework
+        run: tooling/scripts/build_apple_xcframework.sh
+
+      - name: Generate Xcode project
+        run: |
+          cd apps/apple/XcodeGen
+          xcodegen generate
+
+      - name: Swift tests
+        run: |
+          cd apps/apple/XcodeGen
+          xcodebuild test \
+            -project InfoMatrix.xcodeproj \
+            -scheme InfoMatrix-macOS \
+            -destination 'platform=macOS' \
+            CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO

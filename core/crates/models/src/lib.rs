@@ -518,3 +518,66 @@ pub struct PushEndpointRegistration {
     /// Update timestamp.
     pub updated_at: DateTime<Utc>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn feed_type_json_roundtrip() {
+        assert_eq!(serde_json::to_string(&FeedType::Rss).unwrap(), "\"Rss\"");
+        assert_eq!(serde_json::to_string(&FeedType::Atom).unwrap(), "\"Atom\"");
+        assert_eq!(serde_json::to_string(&FeedType::JsonFeed).unwrap(), "\"JsonFeed\"");
+        assert_eq!(serde_json::to_string(&FeedType::Unknown).unwrap(), "\"Unknown\"");
+
+        for value in [FeedType::Rss, FeedType::Atom, FeedType::JsonFeed, FeedType::Unknown] {
+            let json = serde_json::to_string(&value).unwrap();
+            let decoded: FeedType = serde_json::from_str(&json).unwrap();
+            assert_eq!(decoded, value);
+        }
+    }
+
+    #[test]
+    fn entry_kind_json_roundtrip() {
+        for value in [EntryKind::Article, EntryKind::Note, EntryKind::Bookmark, EntryKind::Quote] {
+            let json = serde_json::to_string(&value).unwrap();
+            let decoded: EntryKind = serde_json::from_str(&json).unwrap();
+            assert_eq!(decoded, value);
+        }
+    }
+
+    #[test]
+    fn item_state_patch_serde() {
+        let patch = ItemStatePatch {
+            is_read: Some(true),
+            is_starred: None,
+            is_saved_for_later: Some(false),
+            is_archived: None,
+        };
+        let json = serde_json::to_string(&patch).unwrap();
+        let decoded: ItemStatePatch = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.is_read, Some(true));
+        assert_eq!(decoded.is_starred, None);
+        assert_eq!(decoded.is_saved_for_later, Some(false));
+    }
+
+    #[test]
+    fn notification_mode_json_roundtrip() {
+        for value in [NotificationMode::Immediate, NotificationMode::Digest] {
+            let json = serde_json::to_string(&value).unwrap();
+            let decoded: NotificationMode = serde_json::from_str(&json).unwrap();
+            assert_eq!(decoded, value);
+        }
+    }
+
+    #[test]
+    fn scope_counts_field_access() {
+        let counts = ItemScopeCounts { all: 10, unread: 3, starred: 1, later: 2, notes: 0, archive: 4 };
+        assert_eq!(counts.all, 10);
+        assert_eq!(counts.unread, 3);
+        assert_eq!(counts.starred, 1);
+        assert_eq!(counts.later, 2);
+        assert_eq!(counts.notes, 0);
+        assert_eq!(counts.archive, 4);
+    }
+}

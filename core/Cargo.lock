@@ -1280,6 +1280,7 @@ version = "0.1.1"
 dependencies = [
  "chrono",
  "serde",
+ "serde_json",
  "url",
  "uuid",
 ]
@@ -2060,6 +2061,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "thiserror",
+ "tracing",
  "url",
  "uuid",
 ]
@@ -2119,6 +2121,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "serde",
+ "serde_json",
  "thiserror",
  "uuid",
 ]

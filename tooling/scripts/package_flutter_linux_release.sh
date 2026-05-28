@@ -67,7 +67,7 @@ Version: ${LINUX_VERSION}
 Section: net
 Priority: optional
 Architecture: amd64
-Maintainer: InfoMatrix <noreply@example.com>
+Maintainer: Mengyang Gao <gao.mengyang@outlook.com>
 Description: InfoMatrix local-first reader
 CONTROL
 

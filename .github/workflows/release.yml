@@ -150,6 +150,19 @@ jobs:
             echo "iOS device release is unavailable; continuing with simulator artifacts only." >&2
           fi
 
+      - name: Run Rust workspace tests
+        run: cargo test --workspace
+        working-directory: core
+
+      - name: Run Apple shell tests
+        run: |
+          cd apps/apple/XcodeGen
+          xcodebuild test \
+            -project InfoMatrix.xcodeproj \
+            -scheme InfoMatrix-macOS \
+            -destination 'platform=macOS' \
+            CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
+
       - name: Build Apple packages
         run: |
           tooling/scripts/package_macos_release.sh
@@ -212,6 +225,14 @@ jobs:
             echo "INFOMATRIX_VERSION=0.1.0" >> "${GITHUB_ENV}"
           fi
 
+      - name: Run Rust workspace tests
+        run: cargo test --workspace
+        working-directory: core
+
+      - name: Run Flutter tests
+        run: flutter test
+        working-directory: apps/flutter
+
       - name: Build Windows package
         shell: bash
         run: tooling/scripts/package_flutter_windows_release.sh
@@ -262,6 +283,14 @@ jobs:
           else
             echo "INFOMATRIX_VERSION=0.1.0" >> "${GITHUB_ENV}"
           fi
+
+      - name: Run Rust workspace tests
+        run: cargo test --workspace
+        working-directory: core
+
+      - name: Run Flutter tests
+        run: flutter test
+        working-directory: apps/flutter
 
       - name: Build Linux package
         run: tooling/scripts/package_flutter_linux_release.sh
@@ -346,6 +375,14 @@ jobs:
             echo "INFOMATRIX_ANDROID_ALLOW_DEBUG_SIGNING=1" >> "${GITHUB_ENV}"
           fi
 
+      - name: Run Rust workspace tests
+        run: cargo test --workspace
+        working-directory: core
+
+      - name: Run Flutter tests
+        run: flutter test
+        working-directory: apps/flutter
+
       - name: Build Android package
         env:
           INFOMATRIX_ANDROID_FFI_PROFILE: debug
@@ -379,6 +416,8 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - name: Download macOS artifacts
         uses: actions/download-artifact@v4
         with:
@@ -419,3 +458,19 @@ jobs:
             dist/releases/linux/*.SHA256SUMS
           generate_release_notes: true
           fail_on_unmatched_files: true
+
+      - name: Update Homebrew Cask
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          ZIP_PATH="dist/releases/macos/InfoMatrix-macos.zip"
+          if [[ -f "${ZIP_PATH}" ]]; then
+            SHA256="$(sha256sum "${ZIP_PATH}" | awk '{print $1}')"
+            sed -i "s/version \".*\"/version \"${VERSION}\"/" Casks/infomatrix.rb
+            sed -i "s/sha256 \".*\"/sha256 \"${SHA256}\"/" Casks/infomatrix.rb
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add Casks/infomatrix.rb
+            git commit -m "chore: update Homebrew cask to ${VERSION}" || true
+            git push origin HEAD:main || true
+          fi

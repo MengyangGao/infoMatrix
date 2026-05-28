@@ -119,43 +119,55 @@ public final class CloudKitSyncCoordinator: ObservableObject, @unchecked Sendabl
         status.isSyncing = true
         defer { status.isSyncing = false }
 
-        do {
-            let accountState = try await makeTransport().accountStatus()
-            status.accountState = accountState
-            guard accountState == .available else {
-                status.lastErrorMessage = "CloudKit account is not available"
-                status.pendingLocalEventCount = await pendingSyncEventCount()
-                return
-            }
+        let maxRetries = 3
+        var lastError: Error?
 
-            let pending = try await service.listPendingSyncEvents(limit: 500)
-            if !pending.isEmpty {
-                try await makeTransport().upload(events: pending, originDeviceID: originDeviceID)
-                _ = try await service.acknowledgeSyncEvents(eventIDs: pending.map(\.id))
-            }
-
-            let remoteEvents = try await makeTransport().fetchRemoteEvents(
-                after: status.lastSyncAt,
-                excludingOriginDeviceID: originDeviceID
-            )
-            if !remoteEvents.isEmpty {
-                _ = try await service.applySyncEvents(remoteEvents)
-                if let newest = remoteEvents.compactMap({ Self.decodeDate($0.createdAt) }).max() {
-                    status.lastSyncAt = newest
-                    defaults.set(Self.encodeDate(newest), forKey: lastSyncKey)
+        for attempt in 0..<maxRetries {
+            do {
+                let accountState = try await makeTransport().accountStatus()
+                status.accountState = accountState
+                guard accountState == .available else {
+                    status.lastErrorMessage = "CloudKit account is not available"
+                    status.pendingLocalEventCount = await pendingSyncEventCount()
+                    return
                 }
-            } else {
-                let now = Date()
-                status.lastSyncAt = now
-                defaults.set(Self.encodeDate(now), forKey: lastSyncKey)
-            }
 
-            status.pendingLocalEventCount = await pendingSyncEventCount()
-            status.lastErrorMessage = nil
-        } catch {
-            status.lastErrorMessage = error.localizedDescription
-            status.pendingLocalEventCount = await pendingSyncEventCount()
+                let pending = try await service.listPendingSyncEvents(limit: 500)
+                if !pending.isEmpty {
+                    try await makeTransport().upload(events: pending, originDeviceID: originDeviceID)
+                    _ = try await service.acknowledgeSyncEvents(eventIDs: pending.map(\.id))
+                }
+
+                let remoteEvents = try await makeTransport().fetchRemoteEvents(
+                    after: status.lastSyncAt,
+                    excludingOriginDeviceID: originDeviceID
+                )
+                if !remoteEvents.isEmpty {
+                    _ = try await service.applySyncEvents(remoteEvents)
+                    if let newest = remoteEvents.compactMap({ Self.decodeDate($0.createdAt) }).max() {
+                        status.lastSyncAt = newest
+                        defaults.set(Self.encodeDate(newest), forKey: lastSyncKey)
+                    }
+                } else {
+                    let now = Date()
+                    status.lastSyncAt = now
+                    defaults.set(Self.encodeDate(now), forKey: lastSyncKey)
+                }
+
+                status.pendingLocalEventCount = await pendingSyncEventCount()
+                status.lastErrorMessage = nil
+                return
+            } catch {
+                lastError = error
+                if attempt < maxRetries - 1 {
+                    let delay = UInt64(pow(2.0, Double(attempt)) * 1_000_000_000)
+                    try? await Task.sleep(nanoseconds: delay)
+                }
+            }
         }
+
+        status.lastErrorMessage = lastError?.localizedDescription ?? "CloudKit sync failed after \(maxRetries) attempts"
+        status.pendingLocalEventCount = await pendingSyncEventCount()
     }
 
     private static func encodeDate(_ date: Date) -> String {

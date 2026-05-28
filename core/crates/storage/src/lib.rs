@@ -11,7 +11,8 @@ use rusqlite::{Connection, OptionalExtension, params};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::cell::Cell;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use thiserror::Error;
 use url::Url;
 use uuid::Uuid;
@@ -404,22 +405,20 @@ pub enum StorageError {
 }
 
 struct SyncEventSuppressionGuard {
-    storage: *const Storage,
+    flag: Arc<AtomicBool>,
     previous: bool,
 }
 
 impl Drop for SyncEventSuppressionGuard {
     fn drop(&mut self) {
-        unsafe {
-            (*self.storage).sync_events_suppressed.set(self.previous);
-        }
+        self.flag.store(self.previous, Ordering::Relaxed);
     }
 }
 
 /// SQLite-backed storage service.
 pub struct Storage {
     conn: Connection,
-    sync_events_suppressed: Cell<bool>,
+    sync_events_suppressed: Arc<AtomicBool>,
 }
 
 /// Global item list filter.
@@ -442,14 +441,14 @@ impl Storage {
     pub fn open(path: &str) -> Result<Self, StorageError> {
         let conn = Connection::open(path)?;
         conn.execute_batch("PRAGMA foreign_keys = ON;")?;
-        Ok(Self { conn, sync_events_suppressed: Cell::new(false) })
+        Ok(Self { conn, sync_events_suppressed: Arc::new(AtomicBool::new(false)) })
     }
 
     /// Open in-memory database (mostly for tests).
     pub fn open_in_memory() -> Result<Self, StorageError> {
         let conn = Connection::open_in_memory()?;
         conn.execute_batch("PRAGMA foreign_keys = ON;")?;
-        Ok(Self { conn, sync_events_suppressed: Cell::new(false) })
+        Ok(Self { conn, sync_events_suppressed: Arc::new(AtomicBool::new(false)) })
     }
 
     /// Apply schema migrations.
@@ -689,15 +688,15 @@ impl Storage {
         event_type: &str,
         payload_json: &str,
     ) -> Result<(), StorageError> {
-        if self.sync_events_suppressed.get() {
+        if self.sync_events_suppressed.load(Ordering::Relaxed) {
             return Ok(());
         }
         self.append_sync_event(entity_type, entity_id, event_type, payload_json)
     }
 
     fn suppress_sync_events(&self) -> SyncEventSuppressionGuard {
-        let previous = self.sync_events_suppressed.replace(true);
-        SyncEventSuppressionGuard { storage: self as *const Storage, previous }
+        let previous = self.sync_events_suppressed.swap(true, Ordering::Relaxed);
+        SyncEventSuppressionGuard { flag: self.sync_events_suppressed.clone(), previous }
     }
 
     fn ensure_notification_settings_digest_max_items_column(&self) -> Result<(), StorageError> {
@@ -2862,7 +2861,9 @@ impl Storage {
                     }
                     applied += 1;
                 }
-                _ => {}
+                other => {
+                    tracing::warn!(entity_type = %other, "Ignoring unknown sync event entity_type");
+                }
             }
         }
 

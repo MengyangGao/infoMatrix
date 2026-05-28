@@ -1240,6 +1240,12 @@ class _ReaderShellPageState extends State<ReaderShellPage> {
                 hintText: '搜索当前收件箱 / 订阅 / 随想',
                 prefixIcon: Icon(Icons.search),
               ),
+              onChanged: (_) {
+                _searchDebounce?.cancel();
+                _searchDebounce = Timer(const Duration(milliseconds: 400), () {
+                  _applySearch();
+                });
+              },
               onSubmitted: (_) => _applySearch(),
             ),
           ),

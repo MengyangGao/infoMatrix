@@ -371,11 +371,12 @@ public final class AppState: ObservableObject {
                     }
                     _ = await refreshItemsForSelection(query: searchQuery)
                 }
-                selectedItemID = itemID
-                selectedItemDetail = try await hydratedDetail(
+                let detail = try await hydratedDetail(
                     itemID: itemID,
                     allowFullText: shouldAutoFetchFullText(for: itemID)
                 )
+                guard self.selectedItemID == itemID else { return }
+                self.selectedItemDetail = detail
             } catch {
                 if (error as NSError).code != 404 {
                     errorMessage = error.localizedDescription

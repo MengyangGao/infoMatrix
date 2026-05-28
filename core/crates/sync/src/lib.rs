@@ -64,3 +64,41 @@ impl SyncAdapter for LocalOnlySyncAdapter {
         Ok(Vec::new())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sync_event_type_json_roundtrip() {
+        for value in [SyncEventType::Created, SyncEventType::Updated, SyncEventType::Deleted] {
+            let json = serde_json::to_string(&value).unwrap();
+            let decoded: SyncEventType = serde_json::from_str(&json).unwrap();
+            assert_eq!(decoded, value);
+        }
+    }
+
+    #[test]
+    fn sync_event_serde_roundtrip() {
+        let event = SyncEvent {
+            id: Uuid::from_bytes([1u8; 16]),
+            entity_type: "feed".to_string(),
+            entity_id: "feed-123".to_string(),
+            event_type: SyncEventType::Created,
+            payload_json: r#"{"title":"Test Feed"}"#.to_string(),
+            created_at: Utc::now(),
+        };
+        let json = serde_json::to_string(&event).unwrap();
+        let decoded: SyncEvent = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.entity_type, event.entity_type);
+        assert_eq!(decoded.entity_id, event.entity_id);
+        assert_eq!(decoded.event_type, event.event_type);
+        assert_eq!(decoded.payload_json, event.payload_json);
+    }
+
+    #[test]
+    fn sync_error_display() {
+        let err = SyncError::Adapter("network timeout".to_string());
+        assert_eq!(err.to_string(), "adapter error: network timeout");
+    }
+}
