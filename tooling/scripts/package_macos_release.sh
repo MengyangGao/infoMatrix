@@ -58,7 +58,9 @@ sign_item() {
   if [[ -n "${MACOS_SIGNING_IDENTITY}" ]]; then
     codesign --force --options runtime --timestamp --sign "${MACOS_SIGNING_IDENTITY}" "${item}"
   else
-    echo "No signing identity configured; preserving Xcode linker-signed binary."
+    echo "No signing identity configured; re-signing with ad-hoc stripped entitlements (no CloudKit)."
+    local adhoc_entitlements="${ROOT_DIR}/apps/apple/Entitlements/InfoMatrix-macOS-adhoc.entitlements"
+    codesign --force --sign - --entitlements "${adhoc_entitlements}" "${item}"
   fi
 }
 

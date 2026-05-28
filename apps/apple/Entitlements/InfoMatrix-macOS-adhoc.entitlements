@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Ad-hoc signed releases cannot use CloudKit entitlements (they require
+	     an Apple Developer Team ID). This stripped entitlement file is used
+	     when INFOMATRIX_MACOS_SIGNING_IDENTITY is not set. -->
+</dict>
+</plist>
