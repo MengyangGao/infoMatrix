@@ -86,7 +86,7 @@ jobs:
       - name: Generate Xcode project
         run: |
           cd apps/apple/XcodeGen
-          xcodegen generate
+          mint run xcodegen generate
 
       - name: Swift tests
         run: |
