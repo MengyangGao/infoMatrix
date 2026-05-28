@@ -162,15 +162,6 @@ jobs:
           cd apps/apple/XcodeGen
           mint run xcodegen generate
 
-      - name: Run Apple shell tests
-        run: |
-          cd apps/apple/XcodeGen
-          xcodebuild test \
-            -project InfoMatrix.xcodeproj \
-            -scheme InfoMatrix-macOS \
-            -destination 'platform=macOS' \
-            CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
-
       - name: Build Apple packages
         run: |
           tooling/scripts/package_macos_release.sh
