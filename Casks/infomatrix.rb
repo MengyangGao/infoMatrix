@@ -1,8 +1,8 @@
 cask "infomatrix" do
   desc "Privacy-respecting cross-platform RSS reader"
   homepage "https://github.com/MengyangGao/infoMatrix"
-  version "0.1.4"
-  sha256 "2ca348b4b977b4d1c54a16fdfde3b6a44a98428bad54d811b166b1727c5802ac"
+  version "0.1.5"
+  sha256 "5f31399f084853a28b47077ffbffc1391aa0cad1b1094fe7c570c57eebf5ec4e"
 
   url "https://github.com/MengyangGao/infoMatrix/releases/download/v#{version}/InfoMatrix-macos.zip"
 
