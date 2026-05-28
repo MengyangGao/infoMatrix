@@ -58,7 +58,7 @@ sign_item() {
   if [[ -n "${MACOS_SIGNING_IDENTITY}" ]]; then
     codesign --force --options runtime --timestamp --sign "${MACOS_SIGNING_IDENTITY}" "${item}"
   else
-    codesign --force --sign - "${item}"
+    echo "No signing identity configured; preserving Xcode linker-signed binary."
   fi
 }
 
