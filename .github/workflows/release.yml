@@ -154,6 +154,14 @@ jobs:
         run: cargo test --workspace
         working-directory: core
 
+      - name: Build Apple XCFramework
+        run: tooling/scripts/build_apple_xcframework.sh
+
+      - name: Generate Xcode project
+        run: |
+          cd apps/apple/XcodeGen
+          xcodegen generate
+
       - name: Run Apple shell tests
         run: |
           cd apps/apple/XcodeGen
