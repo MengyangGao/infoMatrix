@@ -58,7 +58,7 @@ Categories=Network;Office;
 Terminal=false
 DESKTOP
 
-LINUX_VERSION="${INFOMATRIX_VERSION:-0.1.1}"
+LINUX_VERSION="${INFOMATRIX_VERSION:-0.1.0}"
 LINUX_VERSION="${LINUX_VERSION#v}"
 
 cat > "${STAGE_DIR}/debroot/DEBIAN/control" <<CONTROL

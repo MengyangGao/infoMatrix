@@ -57,7 +57,7 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       configs:
         Release:
-          CODE_SIGN_ENTITLEMENTS: ../Entitlements/InfoMatrix-macOS.entitlements
+          CODE_SIGN_ENTITLEMENTS: ../Entitlements/InfoMatrix-macOS-adhoc.entitlements
 
   InfoMatrix-iOS:
     type: application
