@@ -197,17 +197,35 @@ public final class CloudKitSyncCoordinator: ObservableObject, @unchecked Sendabl
 }
 
 #if canImport(CloudKit)
+import Security
+
+private func hasCloudKitEntitlements() -> Bool {
+    guard let task = SecTaskCreateFromSelf(nil) else { return false }
+    let value = SecTaskCopyValueForEntitlement(
+        task,
+        "com.apple.developer.icloud-services" as CFString,
+        nil
+    )
+    guard let services = value as? [String] else { return false }
+    return services.contains("CloudKit")
+}
+
 public final class LiveCloudKitSyncTransport: CloudKitSyncTransport, @unchecked Sendable {
-    private let container: CKContainer
+    private let container: CKContainer?
     private let recordType = "InfoMatrixSyncEvent"
     private let createdAtKey = "created_at"
     private let originDeviceIDKey = "origin_device_id"
 
-    public init(container: CKContainer = .default()) {
-        self.container = container
+    public init() {
+        if hasCloudKitEntitlements() {
+            self.container = CKContainer.default()
+        } else {
+            self.container = nil
+        }
     }
 
     public func accountStatus() async throws -> CloudKitSyncAccountState {
+        guard let container else { return .couldNotDetermine }
         switch try await container.accountStatus() {
         case .available:
             return .available
@@ -225,7 +243,7 @@ public final class LiveCloudKitSyncTransport: CloudKitSyncTransport, @unchecked 
     }
 
     public func upload(events: [SyncEvent], originDeviceID: String) async throws {
-        guard !events.isEmpty else { return }
+        guard !events.isEmpty, let container else { return }
         let records = events.map { event -> CKRecord in
             let record = CKRecord(recordType: recordType, recordID: CKRecord.ID(recordName: event.id))
             record["entity_type"] = event.entityType as CKRecordValue
@@ -243,6 +261,7 @@ public final class LiveCloudKitSyncTransport: CloudKitSyncTransport, @unchecked 
         after date: Date?,
         excludingOriginDeviceID originDeviceID: String
     ) async throws -> [SyncEvent] {
+        guard let container else { return [] }
         let predicate: NSPredicate
         if let date {
             predicate = NSPredicate(format: "%K > %@", createdAtKey, date as NSDate)
