@@ -70,7 +70,7 @@ final class NotificationDeliveryCoordinator: ObservableObject {
         await updateBadgeCount()
     }
 
-    private func deliver(_ event: NotificationEvent) async throws {
+    private nonisolated func deliver(_ event: NotificationEvent) async throws {
         let content = UNMutableNotificationContent()
         content.title = event.title
         content.body = event.body
@@ -86,12 +86,10 @@ final class NotificationDeliveryCoordinator: ObservableObject {
 
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             UNUserNotificationCenter.current().add(request) { error in
-                Task { @MainActor in
-                    if let error {
-                        continuation.resume(throwing: error)
-                    } else {
-                        continuation.resume()
-                    }
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume()
                 }
             }
         }
@@ -110,17 +108,15 @@ final class NotificationDeliveryCoordinator: ObservableObject {
         }
     }
 
-    private func requestAuthorization() async throws -> Bool {
+    private nonisolated func requestAuthorization() async throws -> Bool {
         try await withCheckedThrowingContinuation { continuation in
             UNUserNotificationCenter.current().requestAuthorization(
                 options: [.alert, .badge, .sound]
             ) { granted, error in
-                Task { @MainActor in
-                    if let error {
-                        continuation.resume(throwing: error)
-                    } else {
-                        continuation.resume(returning: granted)
-                    }
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume(returning: granted)
                 }
             }
         }
