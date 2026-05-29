@@ -197,10 +197,11 @@ public final class CloudKitSyncCoordinator: ObservableObject, @unchecked Sendabl
 }
 
 #if canImport(CloudKit)
+#if os(macOS)
 import Security
 
 private func hasCloudKitEntitlements() -> Bool {
-    guard let task = SecTaskCreateFromSelf(nil) else { return false }
+    guard let task = SecTaskCreateFromSelf(kCFAllocatorDefault) else { return false }
     let value = SecTaskCopyValueForEntitlement(
         task,
         "com.apple.developer.icloud-services" as CFString,
@@ -209,6 +210,13 @@ private func hasCloudKitEntitlements() -> Bool {
     guard let services = value as? [String] else { return false }
     return services.contains("CloudKit")
 }
+#else
+private func hasCloudKitEntitlements() -> Bool {
+    // iOS builds always include CloudKit entitlements when built with
+    // a provisioning profile; simulator builds also work correctly.
+    return true
+}
+#endif
 
 public final class LiveCloudKitSyncTransport: CloudKitSyncTransport, @unchecked Sendable {
     private let container: CKContainer?
