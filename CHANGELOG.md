@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.5] - 2026-06-22
 
 ### Added
 - New `@mengyanggao/infomatrix` npm package that downloads, verifies, and launches the correct release artifact for macOS, Linux, and Windows.
@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Swift test suite: selection no longer overwritten when marking an item read refreshes the visible list.
 - Removed obsolete `aurora_core_*` fallback symbols from the Flutter shell.
 - Apple shell uses async-safe refresh path (`refreshVisibleItemsPreservingSelection`) for read-state transitions.
+- npm package no longer downloads the native binary during install; the launcher fetches it on first run.
 
 ### Security
 - npm downloader verifies SHA256 checksums before extracting downloaded release artifacts.
