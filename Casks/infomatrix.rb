@@ -1,6 +1,6 @@
 cask "infomatrix" do
-  version "0.1.4"
-  sha256 "b57a6d499af95a1177e273593ef0e1397004d53a331174c26e935d85a266e466"
+  version "0.1.5"
+  sha256 "7361e309d9f1187a5589f9b0076fc24d4d3c020415bd4a5e5298b280e7c238b9"
 
   url "https://github.com/MengyangGao/infoMatrix/releases/download/v#{version}/InfoMatrix-macos.zip"
   name "InfoMatrix"

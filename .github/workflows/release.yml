@@ -535,6 +535,6 @@ jobs:
             echo "Homebrew cask is already up to date."
             exit 0
           fi
-          git pull --rebase origin main
           git commit -m "chore: update Homebrew cask to ${VERSION}"
+          git pull --rebase origin main
           git push origin main
