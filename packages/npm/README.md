@@ -8,7 +8,7 @@ CLI installer and launcher for [InfoMatrix](https://github.com/MengyangGao/infoM
 npm install -g @mengyanggao/infomatrix
 ```
 
-The `postinstall` script downloads the correct platform artifact from GitHub Releases, verifies its SHA256 checksum, and extracts it to `~/.cache/infomatrix-cli/<version>/`.
+The launcher downloads the correct platform artifact from GitHub Releases on first run, verifies its SHA256 checksum, and extracts it to `~/.cache/infomatrix-cli/<version>/`.
 
 ## Usage
 

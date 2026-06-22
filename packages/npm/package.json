@@ -15,7 +15,6 @@
     "node": ">=18"
   },
   "scripts": {
-    "postinstall": "node lib/install.js",
     "test": "node --test test/*.test.js"
   },
   "keywords": [
