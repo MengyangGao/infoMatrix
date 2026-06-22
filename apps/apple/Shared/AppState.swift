@@ -369,7 +369,7 @@ public final class AppState: ObservableObject {
                     if let counts = try? await refreshScopeCounts() {
                         applyScopeCounts(counts)
                     }
-                    _ = await refreshItemsForSelection(query: searchQuery)
+                    await refreshVisibleItemsPreservingSelection(query: searchQuery)
                 }
                 let detail = try await hydratedDetail(
                     itemID: itemID,
@@ -755,6 +755,28 @@ public final class AppState: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
             return false
+        }
+    }
+
+    /// Refreshes the visible item list for the current selection without
+    /// discarding an active user selection. Used while an item is being opened
+    /// so that marking it read does not immediately deselect it.
+    private func refreshVisibleItemsPreservingSelection(query: String?) async {
+        guard selectedFeedID != nil else { return }
+        do {
+            let fetched = try await fetchItemsForSelection(query: query)
+            withAnimation(.snappy(duration: 0.18)) {
+                items = fetched.items
+            }
+            if let selectedItemID,
+               fetched.items.contains(where: { $0.id == selectedItemID }) {
+                selectedItemDetail = try await hydratedDetail(
+                    itemID: selectedItemID,
+                    allowFullText: false
+                )
+            }
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 

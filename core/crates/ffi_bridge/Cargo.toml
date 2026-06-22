@@ -16,13 +16,13 @@ models = { path = "../models" }
 notifications = { path = "../notifications" }
 opml = { path = "../opml" }
 parser = { path = "../parser" }
-ammonia = "4"
+reqwest.workspace = true
 chrono.workspace = true
-scraper.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 uuid.workspace = true
+shared_api = { path = "../shared_api" }
 storage = { path = "../storage" }
 tokio.workspace = true
 url.workspace = true

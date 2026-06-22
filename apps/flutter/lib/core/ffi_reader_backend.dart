@@ -517,34 +517,12 @@ class _InfoMatrixFfiBindings {
   }
 
   _DartFreeString _lookupFreeString() {
-    try {
-      return _library.lookupFunction<_NativeFreeString, _DartFreeString>(
-        'infomatrix_core_free_string',
-      );
-    } on ArgumentError {
-      return _library.lookupFunction<_NativeFreeString, _DartFreeString>(
-        'aurora_core_free_string',
-      );
-    }
+    return _library.lookupFunction<_NativeFreeString, _DartFreeString>(
+      'infomatrix_core_free_string',
+    );
   }
 
-  String _resolveSymbol(String symbol) {
-    try {
-      _library.lookup<NativeFunction<_NativeNoInput>>(symbol);
-      return symbol;
-    } on ArgumentError {
-      if (symbol.startsWith('infomatrix_core_')) {
-        final legacy = symbol.replaceFirst('infomatrix_core_', 'aurora_core_');
-        try {
-          _library.lookup<NativeFunction<_NativeNoInput>>(legacy);
-          return legacy;
-        } on ArgumentError {
-          return symbol;
-        }
-      }
-      return symbol;
-    }
-  }
+  String _resolveSymbol(String symbol) => symbol;
 
   static DynamicLibrary _openLibrary(String? explicitLibPath) {
     final candidates = <String>[];

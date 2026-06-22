@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- New `@mengyanggao/infomatrix` npm package that downloads, verifies, and launches the correct release artifact for macOS, Linux, and Windows.
+- Android release artifacts (`apk` and `aab`) are now published alongside tagged GitHub Releases.
+- Linux portable archive (`InfoMatrix-linux-x64.tar.gz`) for use outside the `.deb` package.
+- GitHub Actions cask audit job and `cargo check --locked` CI gate.
+- Unit tests for shared API URL helpers and subscription input fallback behavior.
+
+### Changed
+- Split release workflow into `publish` and `update-cask` jobs so the cask is updated from the default branch after assets are uploaded.
+- Cask `livecheck` now tracks the latest GitHub release and declares `depends_on macos: :sonoma`.
+- Expanded Cask `zap` cleanup paths and removed the inaccurate `auto_updates` stanza.
+
+### Fixed
+- Swift test suite: selection no longer overwritten when marking an item read refreshes the visible list.
+- Removed obsolete `aurora_core_*` fallback symbols from the Flutter shell.
+- Apple shell uses async-safe refresh path (`refreshVisibleItemsPreservingSelection`) for read-state transitions.
+
+### Security
+- npm downloader verifies SHA256 checksums before extracting downloaded release artifacts.
+- macOS quarantine attribute is stripped after npm download so Gatekeeper uses the normal app-translocation path rather than a blocked quarantined bundle.
+
 ## [0.1.4] - 2026-05-28
 
 ### Added

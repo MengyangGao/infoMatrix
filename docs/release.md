@@ -9,13 +9,14 @@ Ship InfoMatrix as a stable local-first reader with matched Apple and Flutter be
 - macOS users can also install the app through the project-owned Homebrew cask tap:
   - `brew tap MengyangGao/infomatrix https://github.com/MengyangGao/infoMatrix`
   - `brew install --cask infomatrix`
-- The release workflow publishes installable bundles for macOS, iOS simulator, Windows, and Linux.
-- Android packaging remains available for manual smoke builds and store preparation, but it is not published as part of tagged GitHub Releases.
+- The release workflow publishes installable bundles for macOS, iOS simulator, Windows, Linux, and Android.
 - Artifact names are intentionally stable so users can learn one download path per platform:
   - macOS: `InfoMatrix-macos.dmg`, `InfoMatrix-macos.zip`
   - iOS simulator: `InfoMatrix-iOS-simulator.zip`
   - Windows: `InfoMatrix-windows-x64.msix`, `InfoMatrix-windows-x64.zip`
-  - Linux: `InfoMatrix-linux-x64.deb`
+  - Linux: `InfoMatrix-linux-x64.deb`, `InfoMatrix-linux-x64.tar.gz`
+  - Android: `InfoMatrix-android.apk`, `InfoMatrix-android.aab`
+- The npm package `@mengyanggao/infomatrix` downloads and launches the correct artifact for macOS, Linux, and Windows.
 - Checksum files are published next to each platform bundle so downloads can be verified before installation.
 
 ## Required Checks
@@ -49,15 +50,16 @@ Ship InfoMatrix as a stable local-first reader with matched Apple and Flutter be
 - Android release packaging emits:
   - `dist/releases/android/InfoMatrix-android.apk`
   - `dist/releases/android/InfoMatrix-android.aab`
-  The APK is the direct-install package; the AAB is for store-style distribution. Release signing requires `apps/flutter/android/key.properties`. This path is for manual smoke builds or Play Console prep, not for tagged GitHub Releases.
-- In GitHub Actions, Android signing can be supplied from `INFOMATRIX_ANDROID_KEYSTORE_B64`, `INFOMATRIX_ANDROID_KEYSTORE_PASSWORD`, `INFOMATRIX_ANDROID_KEY_ALIAS`, and `INFOMATRIX_ANDROID_KEY_PASSWORD` when you run the Android packaging path manually.
+  The APK is the direct-install package; the AAB is for store-style distribution. Release signing requires `apps/flutter/android/key.properties`.
+- In GitHub Actions, Android signing can be supplied from `INFOMATRIX_ANDROID_KEYSTORE_B64`, `INFOMATRIX_ANDROID_KEYSTORE_PASSWORD`, `INFOMATRIX_ANDROID_KEY_ALIAS`, and `INFOMATRIX_ANDROID_KEY_PASSWORD`.
 - Windows release packaging emits:
   - `dist/releases/windows/InfoMatrix-windows-x64.msix`
   - `dist/releases/windows/InfoMatrix-windows-x64.zip`
   The MSIX is the primary Windows installer; the zip contains `InfoMatrix.exe` and the bundled runtime files for manual unpacking or fallback distribution.
 - Linux release packaging emits:
   - `dist/releases/linux/InfoMatrix-linux-x64.deb`
-  The deb installs the app under `/opt/InfoMatrix` and provides an `infomatrix` launcher.
+  - `dist/releases/linux/InfoMatrix-linux-x64.tar.gz`
+  The deb installs the app under `/opt/InfoMatrix` and provides an `infomatrix` launcher. The tar.gz is a portable archive used by the npm downloader.
 - Version bumps should keep the app version, release notes, and store metadata aligned.
 - `tooling/scripts/release_check.sh` is the preferred local gate before tagging a release because it runs the Rust, Apple, and Flutter checks in one place.
 - The Apple script path is intended to validate macOS and iOS on this workstation; visionOS remains a follow-up slice until the Rust XCFramework includes a supported visionOS variant.
@@ -114,3 +116,9 @@ tooling/scripts/package_flutter_linux_release.sh
 sudo dpkg -i dist/releases/linux/InfoMatrix-linux-x64.deb
 ```
 The package installs `InfoMatrix` under `/opt/InfoMatrix` and registers `infomatrix` on the PATH.
+
+### npm / node
+```bash
+npx @mengyanggao/infomatrix
+```
+The npm package downloads the matching GitHub Release artifact for the current platform and launches it. Set `INFOMATRIX_VERSION` to pick a version, or `INFOMATRIX_INSTALL_DIR` to cache the binary elsewhere. Run `npx @mengyanggao/infomatrix verify` to confirm the downloaded binary passes the published SHA256 checksum.

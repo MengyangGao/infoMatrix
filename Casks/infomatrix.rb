@@ -1,12 +1,29 @@
 cask "infomatrix" do
-  desc "Privacy-respecting cross-platform RSS reader"
-  homepage "https://github.com/MengyangGao/infoMatrix"
-  version "0.1.0"
-  sha256 "1a55965fa4de4ce69fb65896af90b490ee5f5bf1f8c31efa1a7286aba87a0ae9"
+  version "0.1.4"
+  sha256 "b57a6d499af95a1177e273593ef0e1397004d53a331174c26e935d85a266e466"
 
   url "https://github.com/MengyangGao/infoMatrix/releases/download/v#{version}/InfoMatrix-macos.zip"
+  name "InfoMatrix"
+  desc "Privacy-respecting cross-platform RSS reader"
+  homepage "https://github.com/MengyangGao/infoMatrix"
 
-  auto_updates true
+  livecheck do
+    url :url
+    strategy :github_latest
+  end
+
+  depends_on macos: :sonoma
 
   app "InfoMatrix.app"
+
+  zap trash: [
+    "~/Library/Application Support/InfoMatrix",
+    "~/Library/Caches/com.infomatrix.app",
+    "~/Library/Caches/InfoMatrix",
+    "~/Library/HTTPStorages/com.infomatrix.app",
+    "~/Library/Logs/InfoMatrix",
+    "~/Library/Preferences/com.infomatrix.app.plist",
+    "~/Library/Saved Application State/com.infomatrix.app.savedState",
+    "~/Library/WebKit/com.infomatrix.app",
+  ]
 end

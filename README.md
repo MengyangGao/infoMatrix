@@ -38,20 +38,30 @@ brew tap MengyangGao/infomatrix https://github.com/MengyangGao/infoMatrix
 brew install --cask infomatrix
 ```
 
+**Cross-platform** users can install via npm:
+
+```bash
+npm install -g @mengyanggao/infomatrix
+infomatrix
+```
+
 Or download manually:
 
 | Platform | Primary | Fallback |
 |----------|---------|----------|
 | macOS | `InfoMatrix-macos.dmg` | `InfoMatrix-macos.zip` |
 | iOS Simulator | `InfoMatrix-iOS-simulator.zip` | — |
+| Windows | `InfoMatrix-windows-x64.msix` | `InfoMatrix-windows-x64.zip` |
+| Linux | `InfoMatrix-linux-x64.deb` | `InfoMatrix-linux-x64.tar.gz` |
+| Android | `InfoMatrix-android.apk` | `InfoMatrix-android.aab` |
 
 Each release includes `SHA256SUMS` files for artifact verification.
 
-> **Note:** Windows, Linux, and Android builds exist in the source tree but are not published as part of tagged releases at this time.
+### Opening on macOS
 
-### Opening on macOS (unsigned builds)
+Official signed and notarized macOS releases can be opened normally. The Homebrew cask is updated for every stable release; signed and notarized releases open without a Gatekeeper prompt.
 
-If you see **"InfoMatrix cannot be opened because the developer cannot be verified"**, this is expected for pre-release builds that are not yet signed with an Apple Developer ID certificate. To open the app:
+For ad-hoc or pre-release builds that are not notarized, you may see **"InfoMatrix cannot be opened because the developer cannot be verified"**. To open such a build:
 
 1. Drag `InfoMatrix.app` into your **Applications** folder.
 2. Open **System Settings → Privacy & Security**.
@@ -118,6 +128,13 @@ Build or refresh the Apple XCFramework first when the Rust core changes:
 tooling/scripts/build_apple_xcframework.sh
 ```
 
+Run the Swift package tests:
+
+```bash
+cd apps/apple
+swift test --disable-sandbox
+```
+
 Open `apps/apple/XcodeGen/InfoMatrix.xcodeproj` in Xcode, select the `InfoMatrix-macOS` scheme, and run.
 
 Or use a single command:
@@ -149,6 +166,9 @@ Apple shell:
 
 - **macOS**: macOS 14 Sonoma or later, Apple Silicon or Intel
 - **iOS**: iOS 17 or later (simulator builds available for development)
+- **Windows**: Windows 10 version 1809 or later (x64)
+- **Linux**: Debian/Ubuntu-style distributions for the `.deb` package, or use the tarball
+- **Android**: Android 8.0 (API 26) or later
 
 ## Contributing
 

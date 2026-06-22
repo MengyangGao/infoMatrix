@@ -1,0 +1,36 @@
+{
+  "name": "@mengyanggao/infomatrix",
+  "version": "0.1.5",
+  "description": "InfoMatrix CLI installer and launcher",
+  "bin": {
+    "infomatrix": "bin/infomatrix.js"
+  },
+  "main": "lib/index.js",
+  "files": [
+    "bin/",
+    "lib/",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "postinstall": "node lib/install.js",
+    "test": "node --test test/*.test.js"
+  },
+  "keywords": [
+    "rss",
+    "reader",
+    "infomatrix"
+  ],
+  "author": "Mengyang Gao <gao.mengyang@outlook.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MengyangGao/infoMatrix.git"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

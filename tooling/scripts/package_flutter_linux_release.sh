@@ -75,5 +75,10 @@ DEB_PATH="${RELEASE_DIR}/InfoMatrix-linux-x64.deb"
 rm -f "${DEB_PATH}"
 dpkg-deb --build "${STAGE_DIR}/debroot" "${DEB_PATH}" >/dev/null
 
+TAR_PATH="${RELEASE_DIR}/InfoMatrix-linux-x64.tar.gz"
+rm -f "${TAR_PATH}"
+tar -czf "${TAR_PATH}" -C "${STAGE_DIR}" "$(basename "${APP_DIR}")"
+
 echo "Done: ${APP_DIR}"
 echo "Done: ${DEB_PATH}"
+echo "Done: ${TAR_PATH}"

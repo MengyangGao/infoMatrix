@@ -29,6 +29,10 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
         working-directory: core
 
+      - name: Rust locked build check
+        run: cargo check --locked --workspace
+        working-directory: core
+
       - name: Rust tests
         run: cargo test --workspace
         working-directory: core
@@ -88,11 +92,56 @@ jobs:
           cd apps/apple/XcodeGen
           mint run xcodegen generate
 
-      - name: Swift tests
+      - name: Build Apple macOS app
         run: |
           cd apps/apple/XcodeGen
-          xcodebuild test \
+          xcodebuild build \
             -project InfoMatrix.xcodeproj \
             -scheme InfoMatrix-macOS \
             -destination 'platform=macOS' \
             CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
+
+      - name: Swift Package tests
+        run: |
+          cd apps/apple
+          swift test --disable-sandbox
+
+  homebrew:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cask style
+        run: brew style Casks/infomatrix.rb
+
+      - name: Cask audit (offline)
+        run: |
+          brew tap-new infomatrix/ci
+          mkdir -p "$(brew --repo infomatrix/ci)/Casks"
+          cp Casks/infomatrix.rb "$(brew --repo infomatrix/ci)/Casks/infomatrix.rb"
+          brew audit --cask --strict infomatrix/ci/infomatrix
+
+      - name: Cask audit (online)
+        run: |
+          brew audit --cask --strict infomatrix/ci/infomatrix --online
+
+  npm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install and test npm package
+        run: |
+          cd packages/npm
+          npm ci
+          npm test
+
+      - name: Pack npm package
+        run: |
+          cd packages/npm
+          npm pack

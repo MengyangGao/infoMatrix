@@ -572,7 +572,8 @@ mod tests {
 
     #[test]
     fn scope_counts_field_access() {
-        let counts = ItemScopeCounts { all: 10, unread: 3, starred: 1, later: 2, notes: 0, archive: 4 };
+        let counts =
+            ItemScopeCounts { all: 10, unread: 3, starred: 1, later: 2, notes: 0, archive: 4 };
         assert_eq!(counts.all, 10);
         assert_eq!(counts.unread, 3);
         assert_eq!(counts.starred, 1);

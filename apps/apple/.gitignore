@@ -3,3 +3,10 @@
 .derivedData/
 *.xcworkspace
 *.xcuserdatad/
+
+# Swift Package Manager / local build artifacts
+.build/
+
+# Generated FFI framework
+Frameworks/InfoMatrixCore.xcframework
+

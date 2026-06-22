@@ -12,6 +12,8 @@ permissions:
 jobs:
   apple:
     runs-on: macos-14
+    outputs:
+      cask_updatable: ${{ steps.cask_config.outputs.cask_updatable }}
     steps:
       - uses: actions/checkout@v4
 
@@ -150,6 +152,19 @@ jobs:
             echo "iOS device release is unavailable; continuing with simulator artifacts only." >&2
           fi
 
+      - name: Determine whether Homebrew cask can be updated
+        id: cask_config
+        shell: bash
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          if [[ "${GITHUB_REF_TYPE}" == "tag" && ! "${tag}" =~ -(alpha|beta|rc) ]]; then
+            echo "cask_updatable=1" >> "${GITHUB_OUTPUT}"
+            echo "Homebrew cask will be updated for stable release ${tag}."
+          else
+            echo "cask_updatable=0" >> "${GITHUB_OUTPUT}"
+            echo "Homebrew cask will not be updated for pre-release tags."
+          fi
+
       - name: Run Rust workspace tests
         run: cargo test --workspace
         working-directory: core
@@ -202,7 +217,6 @@ jobs:
           if-no-files-found: error
 
   windows:
-    if: github.ref_type != 'tag' || github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -257,7 +271,6 @@ jobs:
           if-no-files-found: error
 
   linux:
-    if: github.ref_type != 'tag' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -317,7 +330,6 @@ jobs:
           if-no-files-found: error
 
   android:
-    if: github.ref_type != 'tag' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -412,10 +424,25 @@ jobs:
   publish:
     needs:
       - apple
+      - windows
+      - linux
+      - android
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - name: Determine prerelease flag
+        id: meta
+        shell: bash
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          if [[ "${tag}" =~ -(alpha|beta|rc) ]]; then
+            echo "prerelease=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "prerelease=false" >> "${GITHUB_OUTPUT}"
+          fi
 
       - name: Download macOS artifacts
         uses: actions/download-artifact@v4
@@ -429,6 +456,24 @@ jobs:
           name: ios-release
           path: dist/releases/ios
 
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-release
+          path: dist/releases/windows
+
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-release
+          path: dist/releases/linux
+
+      - name: Download Android artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: android-release
+          path: dist/releases/android
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -437,22 +482,59 @@ jobs:
             dist/releases/macos/*.zip
             dist/releases/macos/*.SHA256SUMS
             dist/releases/ios/*.zip
+            dist/releases/ios/*.ipa
             dist/releases/ios/*.SHA256SUMS
+            dist/releases/windows/*.zip
+            dist/releases/windows/*.msix
+            dist/releases/windows/*.SHA256SUMS
+            dist/releases/linux/*.deb
+            dist/releases/linux/*.tar.gz
+            dist/releases/linux/*.SHA256SUMS
+            dist/releases/android/*.apk
+            dist/releases/android/*.SHA256SUMS
           generate_release_notes: true
-          fail_on_unmatched_files: true
+          fail_on_unmatched_files: false
+          prerelease: ${{ steps.meta.outputs.prerelease == 'true' }}
+
+  update-cask:
+    needs:
+      - apple
+      - publish
+    if: startsWith(github.ref, 'refs/tags/v') && needs.apple.outputs.cask_updatable == '1'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-release
+          path: dist/releases/macos
 
       - name: Update Homebrew Cask
-        if: startsWith(github.ref, 'refs/tags/v')
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           ZIP_PATH="dist/releases/macos/InfoMatrix-macos.zip"
-          if [[ -f "${ZIP_PATH}" ]]; then
-            SHA256="$(sha256sum "${ZIP_PATH}" | awk '{print $1}')"
-            sed -i "s/version \".*\"/version \"${VERSION}\"/" Casks/infomatrix.rb
-            sed -i "s/sha256 \".*\"/sha256 \"${SHA256}\"/" Casks/infomatrix.rb
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add Casks/infomatrix.rb
-            git commit -m "chore: update Homebrew cask to ${VERSION}" || true
-            git push origin HEAD:main || true
+          if [[ ! -f "${ZIP_PATH}" ]]; then
+            echo "Notarized macOS ZIP artifact not found; cannot update cask." >&2
+            exit 1
           fi
+          SHA256="$(sha256sum "${ZIP_PATH}" | awk '{print $1}')"
+          sed -i "s/version \".*\"/version \"${VERSION}\"/" Casks/infomatrix.rb
+          sed -i "s/sha256 \".*\"/sha256 \"${SHA256}\"/" Casks/infomatrix.rb
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Casks/infomatrix.rb
+          if git diff --cached --quiet; then
+            echo "Homebrew cask is already up to date."
+            exit 0
+          fi
+          git pull --rebase origin main
+          git commit -m "chore: update Homebrew cask to ${VERSION}"
+          git push origin main

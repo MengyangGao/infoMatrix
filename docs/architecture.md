@@ -48,6 +48,7 @@ flowchart TB
   subgraph Rust["Rust core"]
     FFI["ffi_bridge"]
     Core["app_core"]
+    Shared["shared_api"]
     Discovery["discovery"]
     Fetcher["fetcher"]
     Parser["parser"]
@@ -60,13 +61,15 @@ flowchart TB
   Apple --> FFI
   Flutter --> FFI
   FFI --> Core
+  FFI --> Shared
+  Server --> Core
+  Server --> Shared
   Core --> Discovery
   Core --> Fetcher
   Core --> Parser
   Core --> Storage
   Core --> Notifications
   Core --> Sync
-  Server --> Core
 ```
 
 ### Rust Core (`core/crates/*`)
@@ -80,6 +83,7 @@ flowchart TB
 - `opml`: import/export of subscriptions
 - `sync`: sync event model and adapter interfaces
 - `app_core`: shared orchestration façade for discovery, subscription, listing, entry creation, state mutations, and refresh coordination
+- `shared_api`: request/response helpers, content extraction, URL normalization, and notification mapping shared by `app_server` and `ffi_bridge` so the two façades do not drift
 - `app_server`: local HTTP façade for debug tooling and service-style integrations, built on top of `app_core`
 - `ffi_bridge`: C ABI JSON bridge used by Flutter and the Apple native bridge, built on top of `app_core`
 
